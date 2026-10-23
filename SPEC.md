@@ -11,7 +11,7 @@ The examples after each `FILL IN` show the shape of an answer. They are not hint
 ## 1. Team and prompt
 - **Team name:** AeroPrint
 - **Track:** Virtual DL Challenge (7 days), due Fri Oct 23, 3 PM ET. See [`docs/schedule.md`](docs/schedule.md).
-- **Prompt we chose:** Industrial Systems: "3D Printing for Aerospace". An aerospace contractor
+- **Prompt we chose:** Prompt 1, Industrial Systems: "3D Printing for Aerospace". An aerospace contractor
   3D-printing titanium brackets is failing client strength tests; design a tool to monitor and flag
   when and whether the printing process is capable of meeting strict aerospace tolerances, and help
   contractors resolve these issues.

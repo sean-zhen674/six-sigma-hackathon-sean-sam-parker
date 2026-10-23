@@ -45,22 +45,22 @@ tasks:
   - id: H-02
     title: Two or three test datasets plus a codebook
     points: "10 - Tool Documentation: 2-3 working test datasets (5), codebook and README for the data (5)"
-    status: todo
-    owner: ""
-    started_at: ""
+    status: done
+    owner: "agent"
+    started_at: "2026-10-22 20:42"
     owns: ["data/"]
     definition_of_done: >
       ls data/*.csv lists 2 or 3 files (e.g. in control, planted shift, edge
       case), and data/README.md names every one of them and describes every
       column with units and how the data would be collected for real.
-    result: ""
+    result: "3 seeded CSVs (30 builds x 5 coupons, seed 5300) + data/generate.py + data/README.md codebook; ls data/*.csv lists 3, every file and all 19 columns documented; check values recomputed independently"
 
   - id: H-03
     title: Core QC statistic as one plain, tested function
     points: "25 - Tool Implementation: valid analyses relevant to quality control in R or Python"
-    status: todo
-    owner: ""
-    started_at: ""
+    status: done
+    owner: "agent"
+    started_at: "2026-10-22 20:42"
     owns: ["app/qc.py", "app/qc.R", "app/requirements.txt", "tests/"]
     notes: >
       Load the stats-first-steering skill before writing any statistics. Plain
@@ -69,14 +69,14 @@ tasks:
       pytest tests (Python) or Rscript -e "testthat::test_dir('tests')" (R)
       passes, including one test that reproduces the SPEC section 4
       known-answer check and one degenerate case (constant data or n = 1).
-    result: ""
+    result: "app/qc.py (xbar_r, capability, imr, nelson 1-8, disposition, rank_parameters, analyze) + 26 passing tests; stats-reviewer PASS on all formulas, known answer Cpl 3.877, degenerate cases"
 
   - id: H-04
     title: Working tool - one demo copied to app/ and wired to the H-03 function
     points: "25 - Tool Implementation: an effective, working tool (does it run?)"
-    status: todo
-    owner: ""
-    started_at: ""
+    status: done
+    owner: "agent"
+    started_at: "2026-10-22 20:53"
     owns: ["app/"]
     notes: >
       Copy ONE folder from demos/ (the one named in SPEC section 5) to app/.
@@ -86,21 +86,21 @@ tasks:
       The testme script in app/ starts the tool with one command, and a call
       on one data/ file (endpoint, function call or app upload) returns the
       same numbers as the H-03 known-answer test.
-    result: ""
+    result: "FastAPI app/main.py (/health, /datasets, /analyze/{name}, POST /analyze) over qc.analyze; testme.sh starts it; 45 tests pass; live curl on oxygen_drift flags B-1023 with chamber_oxygen_ppm; known answer Cpl 3.877 via API"
 
   - id: H-05
     title: Demonstration of the tool on every test dataset
     points: "10 - Tool Design: a clear demonstration of the tool, using test datasets"
-    status: todo
-    owner: ""
-    started_at: ""
+    status: done
+    owner: "agent"
+    started_at: "2026-10-22 20:59"
     owns: ["demo/", "app/frontend/"]
     definition_of_done: >
       demo/README.md walks through each data/ CSV with the exact command or
       URL to run, the numbers or chart the tool shows, and a one-line "how to
       read this"; a teammate who did not write it follows it and gets the same
       numbers.
-    result: ""
+    result: "React dashboard app/frontend (SVG charts, banner, build table, upload) + demo/README.md with screenshots; npm test 19 pass, build ok; Playwright run matched API numbers on all 3 datasets, no horizontal scroll at 375px"
 
   - id: H-06
     title: Deploy to the course Posit Connect server
@@ -125,9 +125,9 @@ tasks:
   - id: H-07
     title: README and function documentation
     points: "10 - Tool Documentation: excellent, easy-to-follow documentation"
-    status: todo
-    owner: ""
-    started_at: ""
+    status: in_progress
+    owner: "agent"
+    started_at: "2026-10-22 21:07"
     owns: ["README.md", "app/README.md"]
     notes: >
       Replace the hackathon README.md with your tool's README; the event
@@ -137,7 +137,7 @@ tasks:
       how each function or endpoint works, how to run it in one command, the
       live URL, and links demo/README.md. A teammate who did not write the
       code follows it from a fresh clone and it works.
-    result: ""
+    result: "README.md and app/README.md written; fresh-copy install + 45 pytest + 19 npm tests + build pass on Python 3.15. MISSING: live URLs (README.md TODO-DASHBOARD-URL and TODO-API-URL) until H-06 deploys"
 
   - id: H-08
     title: Reproducible public repo, submitted on Devpost
