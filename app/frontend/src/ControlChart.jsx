@@ -169,7 +169,7 @@ export default function ControlChart({
         <ul className="rule-list" aria-label="Rules broken on this chart">
           {rulesBroken(rules, buildIds).map(({ rule, builds }) => (
             <li key={rule}>
-              <strong>Rule {rule}:</strong> {rulePhrase(rule, kind)} (Builds: {builds.map((b, k) => <span key={b} className="nb">{b}{k < builds.length - 1 ? ', ' : ''}</span>)})
+              <strong>Rule {rule}:</strong> {rulePhrase(rule, kind)} (Builds: {builds.map((b, k) => <span key={b}><span className="nb">{b}</span>{k < builds.length - 1 ? ', ' : ''}</span>)})
             </li>
           ))}
         </ul>

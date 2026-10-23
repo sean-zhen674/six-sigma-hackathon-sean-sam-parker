@@ -182,7 +182,8 @@ button.link-button { align-self: flex-start; background: none; border: 0; paddin
 .row-status.clean { color: var(--ok); }
 
 .rule-list { margin: 4px 0 0; padding-left: 1.25rem; color: var(--bad); }
-.rule-list li { margin: 2px 0; }
+.rule-list li { margin: 2px 0; overflow-wrap: anywhere; }
+.chart-note { overflow-wrap: anywhere; }
 .nb { white-space: nowrap; }
 
 .not-capable-note { margin: 8px 0; padding: 8px 12px; background: var(--warn-bg); border: 1px solid #b54708; border-left-width: 6px; border-radius: 6px; color: var(--warn); font-weight: 600; }
