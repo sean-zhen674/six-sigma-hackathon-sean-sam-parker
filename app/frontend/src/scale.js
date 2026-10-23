@@ -33,3 +33,23 @@ export function chartDomain(values, limits, specValues = []) {
   const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.05 || 1
   return [lo - pad, hi + pad]
 }
+
+/**
+ * Move label centers apart so boxes of height h do not overlap, and keep them between lo and hi.
+ * items: [{ y, h }] -> new y for each item, in the same order.
+ */
+export function spreadLabels(items, lo, hi) {
+  const order = items.map((_, i) => i).sort((a, b) => items[a].y - items[b].y)
+  const ys = items.map((it) => it.y)
+  let edge = lo
+  for (const i of order) {
+    ys[i] = Math.max(ys[i], edge + items[i].h / 2)
+    edge = ys[i] + items[i].h / 2
+  }
+  edge = hi
+  for (const i of [...order].reverse()) {
+    ys[i] = Math.min(ys[i], edge - items[i].h / 2)
+    edge = ys[i] - items[i].h / 2
+  }
+  return ys
+}

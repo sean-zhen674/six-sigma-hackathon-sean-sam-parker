@@ -1,15 +1,19 @@
 // Pure display helpers. They format and reshape numbers that the API already computed.
 // Nothing in this file calculates a statistic.
+import { plainNote } from './plain.js'
 
-/** Number -> fixed decimals; null / undefined / NaN -> 'n/a'. */
+// The plain-words helpers (H-11) live in plain.js and are re-exported here.
+export * from './plain.js'
+
+/** Number -> fixed decimals; null / undefined / NaN -> 'not available'. */
 export function fmt(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'n/a'
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'not available'
   return Number(value).toFixed(digits)
 }
 
 /** '2026-02-18T08:00:00' -> '2026-02-18 08:00'. */
 export function fmtTime(ts) {
-  return ts ? String(ts).replace('T', ' ').slice(0, 16) : 'n/a'
+  return ts ? String(ts).replace('T', ' ').slice(0, 16) : 'not available'
 }
 
 /** 'B-1023' -> '1023' (short axis label). */
@@ -23,7 +27,7 @@ export function errorText(status, body) {
   let text
   if (typeof detail === 'string') text = detail
   else if (Array.isArray(detail)) text = detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
-  else text = 'the API gave no details'
+  else text = 'the analysis service gave no details'
   return `HTTP ${status}: ${text}`
 }
 
@@ -33,9 +37,15 @@ export function topSuspect(build) {
   return first ? { parameter: first.parameter, z: first.z, rules: first.rules } : null
 }
 
+/**
+ * The "investigate first" cell. z is how many standard deviations the build's parameter sits from
+ * its center line (the API's number); the sign only picks the word above or below.
+ */
 export function suspectText(build) {
   const s = topSuspect(build)
-  return s ? `${s.parameter} (z = ${fmt(s.z, 1)})` : '-'
+  if (!s) return '-'
+  const side = Number(s.z) < 0 ? 'below' : 'above'
+  return `${friendlyParam(s.parameter)}: ${fmt(Math.abs(Number(s.z)), 1)} standard deviations ${side} the center line`
 }
 
 /** API flags {"1": [indices], ... "8": [...]} -> one array of rule numbers per point. */
@@ -95,7 +105,246 @@ export function capabilityRow(cap, indexKey) {
     value,
     text: fmt(value, 2),
     reliableLabel: cap.reliable ? 'reliable' : 'not reliable (chart out of control)',
-    message: value === null || value === undefined ? cap.message : null,
+    message: value === null || value === undefined ? plainNote(cap.message) : null,
     capable: cap.capable,
+    unreliable: isUnreliable(cap, indexKey),
   }
+}
+
+// ---- H-09: plain-English wording and spec-limit input checks ----
+// Still no statistics: these only join words and numbers the API already returned.
+
+/** Friendly names for build parameters (the API sends the column name). */
+export const PARAM_NAMES = {
+  chamber_oxygen_ppm: 'chamber oxygen (parts per million)',
+  laser_power_W: 'laser power (watts)',
+  scan_speed_mm_s: 'scan speed (millimeters per second)',
+  layer_thickness_um: 'layer thickness (micrometers)',
+  humidity_pct: 'humidity (percent)',
+  powder_bed_temp_C: 'powder bed temperature (degrees Celsius)',
+  build_plate_temp_C: 'build plate temperature (degrees Celsius)',
+  stress_relief_temp_C: 'stress relief temperature (degrees Celsius)',
+}
+
+export function friendlyParam(name) {
+  return PARAM_NAMES[name] || String(name)
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1)
+
+/**
+ * One or two sentences that sum up an API result. It only reads API fields:
+ * process_capable, first_out_of_control_build, builds[].disposition,
+ * builds[].investigate_first[0].parameter. Counting dispositions counts the API's labels.
+ */
+export function summarySentence(result) {
+  const builds = result.builds || []
+  const total = builds.length
+  const quarantined = builds.filter((b) => b.disposition === 'QUARANTINE').length
+  const retest = builds.filter((b) => b.disposition === 'RETEST').length
+  const first = result.first_out_of_control_build
+  const retestText = retest === 1
+    ? '1 build has a coupon outside the specification and should be retested.'
+    : `${retest} builds have a coupon outside the specification and should be retested.`
+
+  if (first) {
+    let head = `From build ${first} the process went out of control`
+    if (quarantined > 0) {
+      head += `; ${plural(quarantined, 'build', 'builds')} should be quarantined`
+      if (retest > 0) head += ` and ${plural(retest, 'build', 'builds')} retested`
+    }
+    head += '.'
+    const flagged = builds.find((b) => b.build_id === first) || builds.find((b) => b.disposition === 'QUARANTINE')
+    const suspect = topSuspect(flagged)
+    const cause = suspect
+      ? `Most likely cause: ${capital(friendlyParam(suspect.parameter))}.`
+      : 'No build parameter stands out as the cause.'
+    return `${head} ${cause}`
+  }
+  if (result.process_capable) {
+    if (retest > 0) return `The process is in control and capable. ${capital(retestText)}`
+    return `All ${total} builds are in control and capable. Every build can be released.`
+  }
+  // In control, but not capable (an index is below the minimum, or an index is missing).
+  const lead = 'No build broke a rule, but the process is not shown to be capable of the specification.'
+  return retest > 0 ? `${lead} ${capital(retestText)}` : lead
+}
+
+/**
+ * 'oxygen_drift' -> 'Oxygen Drift'. Display text only: the dropdown value stays the API name.
+ * Underscores become single spaces, every word starts with a capital, other letters are left alone,
+ * and null / undefined / '' give ''.
+ */
+export function datasetLabel(name) {
+  return String(name ?? '')
+    .split('_')
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/** Heading shown above the two dimensional deviation boxes (they sit side by side). */
+export const DIM_GROUP = 'Dimensional Deviation'
+
+/**
+ * The four spec boxes, in the order they are shown (this is also the order sent to the API).
+ * H-12: the units are abbreviated in these labels at the team's request: (MPa), (%), (mm).
+ * `group` + `short`: the two dimensional boxes show `short` under the DIM_GROUP heading; their full
+ * `label` is still their accessible name.
+ */
+export const SPEC_FIELDS = [
+  { name: 'uts_lsl', label: 'Tensile Strength: Lowest Allowed (MPa)', from: ['uts_MPa', 'lsl'] },
+  { name: 'porosity_usl', label: 'Porosity: Highest Allowed (%)', from: ['porosity_pct', 'usl'] },
+  { name: 'dim_lsl', label: `${DIM_GROUP}: Lowest Allowed (mm)`, short: 'Lowest Allowed (mm)', group: DIM_GROUP, from: ['dimensional_dev_mm', 'lsl'] },
+  { name: 'dim_usl', label: `${DIM_GROUP}: Highest Allowed (mm)`, short: 'Highest Allowed (mm)', group: DIM_GROUP, from: ['dimensional_dev_mm', 'usl'] },
+]
+
+const specLabel = (name) => SPEC_FIELDS.find((f) => f.name === name).label
+
+/** The /spec-limits answer -> the text shown in the four boxes. */
+export function specDefaults(limits) {
+  const out = {}
+  for (const f of SPEC_FIELDS) out[f.name] = String(limits.specs[f.from[0]][f.from[1]] ?? '')
+  return out
+}
+
+/**
+ * Check the four boxes before sending anything. A blank box means "use the default".
+ * Returns { ok: true } or { ok: false, message }.
+ */
+export function validateSpecs(raw) {
+  const nums = {}
+  for (const f of SPEC_FIELDS) {
+    const text = String(raw[f.name] ?? '').trim()
+    if (text === '') continue
+    const n = Number(text)
+    if (!Number.isFinite(n)) return { ok: false, message: `${f.label} must be a number (got "${text}").` }
+    nums[f.name] = n
+  }
+  if (nums.dim_lsl !== undefined && nums.dim_usl !== undefined && nums.dim_lsl >= nums.dim_usl) {
+    return { ok: false, message: `${specLabel('dim_lsl')} must be below ${specLabel('dim_usl')}.` }
+  }
+  return { ok: true }
+}
+
+/** Query string for GET /analyze/{dataset} and POST /analyze: baseline_n plus the non-blank spec boxes. */
+export function analysisQuery(baselineN, specs) {
+  const q = new URLSearchParams({ baseline_n: String(baselineN) })
+  for (const [key, value] of Object.entries(specs || {})) {
+    if (value !== '' && value !== null && value !== undefined) q.set(key, String(value).trim())
+  }
+  return q.toString()
+}
+
+/** Baseline builds: the starting value and the smallest the analysis service accepts. */
+export const DEFAULT_BASELINE = 20
+export const BASELINE_MIN = 5
+
+/**
+ * What to do with the Baseline builds box (Enter, leaving the box and the Update charts button all ask this).
+ * `raw` is what is in the box now; `applied` is the value of the last run.
+ * Returns { kind: 'apply', value } | { kind: 'unchanged' } | { kind: 'invalid', message }.
+ */
+export function baselineChange(raw, applied) {
+  const text = raw === null || raw === undefined ? '' : String(raw).trim()
+  const n = text === '' ? NaN : Number(text)
+  if (!Number.isInteger(n) || n < BASELINE_MIN) {
+    return { kind: 'invalid', message: `Baseline builds must be a whole number of at least ${BASELINE_MIN}.` }
+  }
+  if (n === Number(applied)) return { kind: 'unchanged' }
+  return { kind: 'apply', value: n }
+}
+
+/** One line of help under each chart title. The same component shows all of them. */
+export const CHART_HELP = {
+  xbar: "Build average chart: The average of each build's 5 coupons. Red diamonds are builds that look different from the baseline builds.",
+  r: 'Spread chart: How spread out the 5 coupons are inside one build (the largest value minus the smallest).',
+  i: 'Single value chart: One value per build.',
+  mr: 'Change-from-previous-build chart: How much the value changed from one build to the next (the moving range).',
+}
+
+/** True when the API gave a number for this index but marked it not reliable. */
+export function isUnreliable(cap, indexKey) {
+  const value = cap[indexKey]
+  return value !== null && value !== undefined && cap.reliable === false
+}
+
+export const UNRELIABLE_TEXT = 'Chart out of control: Do not rely on this number'
+
+// ---- H-10: friendlier upload errors and the CSV format panel ----
+// Still no statistics: these map the API's 422 texts to plain advice.
+
+/** The project's public repository (linked from the header). */
+export const REPO_URL = 'https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker'
+
+export const GUIDE_URL = 'https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker/blob/main/docs/csv-format.md'
+
+export const REQUIRED_COLUMNS = ['build_id', 'build_timestamp', 'uts_MPa', 'porosity_pct', 'dimensional_dev_mm']
+export const OPTIONAL_COLUMNS = [
+  'laser_power_W', 'scan_speed_mm_s', 'layer_thickness_um', 'chamber_oxygen_ppm',
+  'humidity_pct', 'powder_bed_temp_C', 'build_plate_temp_C', 'stress_relief_temp_C',
+]
+
+/**
+ * Turn the API's 422 text (or the "HTTP 422: ..." sentence built from it) into a plain-English
+ * hint that says what is wrong and how to fix it. Returns null for a message we do not know,
+ * so the page then shows the raw text only.
+ */
+export function explainUploadError(detail) {
+  const text = String(detail || '')
+  let m = text.match(/missing required columns?: ([^\n]+)/)
+  if (m) {
+    return `Your file is missing a required column: ${m[1].trim()}. Add it, or rename the column you already have. `
+      + 'The header must match exactly, including capital letters and underscores.'
+  }
+  m = text.match(/build (\S+) has (\d+) coupons?[^;]*; each build needs exactly 5/)
+  if (m) {
+    return `Build ${m[1]} has ${m[2]} coupon row${m[2] === '1' ? '' : 's'}, but every build needs exactly 5 (one row per coupon). `
+      + 'Add the missing rows, remove the extra rows, or take that build out of the file.'
+  }
+  m = text.match(/column '([^']+)' has non-numeric text, for example '([^']*)'/)
+  if (m) {
+    return `Column ${m[1]} contains text ("${m[2]}") where a number is needed. `
+      + 'Type plain numbers only: No units or symbols such as the percent sign, a decimal point (not a comma), and no words.'
+  }
+  m = text.match(/column '([^']+)' has an infinite value/)
+  if (m) {
+    return `Column ${m[1]} contains an endless value (inf, or a number too large to store). `
+      + 'Replace it with the real measurement, or delete that row.'
+  }
+  m = text.match(/column '([^']+)' contains True\/False values/)
+  if (m) {
+    return `Column ${m[1]} holds True/False instead of measurements. Export the measured numbers instead.`
+  }
+  m = text.match(/column '([^']+)' contains dates or times/)
+  if (m) {
+    return `Column ${m[1]} holds dates, but a measurement column should hold plain numbers. `
+      + 'Check that the columns are not shifted or in the wrong order.'
+  }
+  m = text.match(/column '([^']+)' appears (\d+) times in the header/)
+  if (m) {
+    return `Two columns share the name ${m[1]}. Delete one of them, or rename it.`
+  }
+  if (/the file has a header but no data rows/.test(text)) {
+    return 'The file has column names but no builds. Add one row per coupon, with five rows for each build.'
+  }
+  m = text.match(/column '([^']+)' has (\d+) blank or missing values?/)
+  if (m) {
+    return `Column ${m[1]} has ${m[2]} empty cell${m[2] === '1' ? '' : 's'}. `
+      + 'Fill every cell in that column, or delete the rows that are incomplete.'
+  }
+  if (/build_timestamp is not a valid date/.test(text)) {
+    return 'Some build_timestamp values are not dates the tool can read. '
+      + 'Use the form 2026-01-05T08:00:00 (year-month-day, then T, then hours:minutes:seconds).'
+  }
+  if (/could not read the upload as a CSV/.test(text)) {
+    return 'The file could not be read as a spreadsheet file (CSV). Save it as a comma-separated UTF-8 file with a header row '
+      + '(in Excel: Save As, then choose the UTF-8 comma-separated type) and try again.'
+  }
+  if (/need at least 2 builds/.test(text)) {
+    return 'A control chart needs at least 2 builds (20 or more is best). Add more builds to the file.'
+  }
+  return null
 }

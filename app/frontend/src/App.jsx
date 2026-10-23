@@ -1,53 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { analyzeDataset, analyzeUpload, fetchDatasets, fetchSpecLimits } from './api.js'
 import ControlChart from './ControlChart.jsx'
+import CsvHelp from './CsvHelp.jsx'
+import Tour from './Tour.jsx'
 import {
-  capabilityRow, fmt, fmtTime, iProps, mrProps, rProps, suspectText, xbarProps,
+  BASELINE_MIN, DEFAULT_BASELINE, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
+  iProps, mrProps, plainNote, rProps, specDefaults, suspectText, summarySentence, validateSpecs, xbarProps,
 } from './format.js'
+import { LEGEND_RULES, MAIN_PARAMS, PARAMS, QUALITY, TEXT } from './labels.js'
+import { markTourSeen, tourSeen } from './tour.js'
 
-// Everything shown here comes from the API response. This file only lays it out.
+// Everything shown here comes from the analysis service's answer. This file only lays it out.
+// The words themselves live in labels.js and format.js.
 
-const QUALITY = [
-  { key: 'uts_MPa', title: 'UTS', unit: 'MPa', digits: 1, index: 'cpl', indexName: 'Cpl (UTS, lower spec)' },
-  { key: 'porosity_pct', title: 'Porosity', unit: '%', digits: 3, index: 'cpu', indexName: 'Cpu (porosity, upper spec)' },
-  { key: 'dimensional_dev_mm', title: 'Dimensional deviation', unit: 'mm', digits: 3, index: 'cpk', indexName: 'Cpk (dimensional, two-sided)' },
-]
-
-const PARAMS = {
-  chamber_oxygen_ppm: { title: 'Chamber oxygen', unit: 'ppm', digits: 1 },
-  laser_power_W: { title: 'Laser power', unit: 'W', digits: 1 },
-  scan_speed_mm_s: { title: 'Scan speed', unit: 'mm/s', digits: 1 },
-  layer_thickness_um: { title: 'Layer thickness', unit: 'µm', digits: 2 },
-  humidity_pct: { title: 'Humidity', unit: '%', digits: 1 },
-  powder_bed_temp_C: { title: 'Powder bed temperature', unit: '°C', digits: 1 },
-  build_plate_temp_C: { title: 'Build plate temperature', unit: '°C', digits: 1 },
-  stress_relief_temp_C: { title: 'Stress relief temperature', unit: '°C', digits: 1 },
+/** The service's description of the selected dataset ('' until the list has loaded). */
+function describe(datasets, name) {
+  const found = datasets.find((d) => d.name === name)
+  return found ? found.description : ''
 }
-const MAIN_PARAMS = ['chamber_oxygen_ppm', 'laser_power_W']
-
-const SPEC_FIELDS = [
-  { name: 'uts_lsl', label: 'UTS LSL (MPa)', from: ['uts_MPa', 'lsl'] },
-  { name: 'porosity_usl', label: 'Porosity USL (%)', from: ['porosity_pct', 'usl'] },
-  { name: 'dim_lsl', label: 'Dimensional LSL (mm)', from: ['dimensional_dev_mm', 'lsl'] },
-  { name: 'dim_usl', label: 'Dimensional USL (mm)', from: ['dimensional_dev_mm', 'usl'] },
-]
-
-const RULES = [
-  [1, 'One point beyond 3 sigma (a sudden jump).'],
-  [2, 'Nine in a row on the same side of the centre line (a small steady shift).'],
-  [3, 'Six in a row steadily rising or falling (a drift).'],
-  [4, 'Fourteen in a row alternating up and down (two things taking turns).'],
-  [5, 'Two of three in a row beyond 2 sigma on the same side.'],
-  [6, 'Four of five in a row beyond 1 sigma on the same side.'],
-  [7, 'Fifteen in a row within 1 sigma of the centre (suspiciously flat).'],
-  [8, 'Eight in a row beyond 1 sigma on either side (none near the centre).'],
-]
 
 function specLines(spec) {
   if (!spec) return []
   return [
-    { label: 'LSL', value: spec.lsl },
-    { label: 'USL', value: spec.usl },
+    { label: 'Lowest allowed value', value: spec.lsl },
+    { label: 'Highest allowed value', value: spec.usl },
   ].filter((s) => s.value !== null && s.value !== undefined)
 }
 
@@ -56,21 +32,58 @@ export default function App() {
   const [dataset, setDataset] = useState('capable_baseline')
   const [file, setFile] = useState(null)
   const [fileKey, setFileKey] = useState(0) // changing it empties the file input
-  const [baselineN, setBaselineN] = useState(20)
-  const [specs, setSpecs] = useState({ uts_lsl: '', porosity_usl: '', dim_lsl: '', dim_usl: '' })
+  const [baselineN, setBaselineN] = useState(DEFAULT_BASELINE) // what is in the Baseline builds box (shared by every button)
+  const [appliedBaseline, setAppliedBaseline] = useState(DEFAULT_BASELINE) // the value of the last request
+  const [baselineError, setBaselineError] = useState(null)
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [defaults, setDefaults] = useState({ uts_lsl: '', porosity_usl: '', dim_lsl: '', dim_usl: '' })
+  const [specs, setSpecs] = useState(defaults)
+  const [specError, setSpecError] = useState(null) // a problem in the allowed-value boxes: no request is sent
+  const [tourOpen, setTourOpen] = useState(() => !tourSeen())
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const latest = useRef(0) // ignore answers that arrive after a newer request
 
-  async function run(nextFile, nextDataset, nextSpecs = specs) {
+  function closeTour() {
+    markTourSeen()
+    setTourOpen(false)
+  }
+
+  // Only one popup at a time: opening one closes the other.
+  function openTour() {
+    setCsvOpen(false)
+    setTourOpen(true)
+  }
+  function changeCsvOpen(open) {
+    if (open) {
+      markTourSeen()
+      setTourOpen(false)
+    }
+    setCsvOpen(open)
+  }
+
+  async function run(nextFile, nextDataset, nextSpecs = specs, nextBaseline = baselineN) {
+    const check = validateSpecs(nextSpecs)
+    if (!check.ok) {
+      setSpecError(check.message)
+      return
+    }
+    setSpecError(null)
+    const baseCheck = baselineChange(nextBaseline, null)
+    if (baseCheck.kind === 'invalid') {
+      setBaselineError(baseCheck.message) // the Baseline builds box needs fixing first: no request is sent
+      return
+    }
+    setBaselineError(null)
+    setAppliedBaseline(Number(nextBaseline))
     const id = ++latest.current
     setLoading(true)
     setError(null)
     try {
       const data = nextFile
-        ? await analyzeUpload(nextFile, baselineN, nextSpecs)
-        : await analyzeDataset(nextDataset, baselineN)
+        ? await analyzeUpload(nextFile, nextBaseline, nextSpecs)
+        : await analyzeDataset(nextDataset, nextBaseline, nextSpecs)
       if (id === latest.current) setResult(data)
     } catch (err) {
       if (id === latest.current) {
@@ -87,14 +100,13 @@ export default function App() {
       try {
         const [list, limits] = await Promise.all([fetchDatasets(), fetchSpecLimits()])
         setDatasets(list.datasets)
-        const filled = {}
-        for (const f of SPEC_FIELDS) filled[f.name] = String(limits.specs[f.from[0]][f.from[1]] ?? '')
+        const filled = specDefaults(limits)
+        setDefaults(filled)
         setSpecs(filled)
+        run(null, 'capable_baseline', filled)
       } catch (err) {
         setError(err.message)
-        return
       }
-      run(null, 'capable_baseline')
     }
     start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,7 +116,27 @@ export default function App() {
     setDataset(e.target.value)
     setFile(null)
     setFileKey((k) => k + 1)
-    run(null, e.target.value)
+    setSpecs(defaults) // a new dataset starts from the default limits
+    run(null, e.target.value, defaults)
+  }
+
+  function onReset() {
+    setSpecs(defaults)
+    setSpecError(null)
+    setBaselineN(DEFAULT_BASELINE)
+    setBaselineError(null)
+    run(file, dataset, defaults, DEFAULT_BASELINE)
+  }
+
+  // Enter, leaving the box and the Update charts button all come here. Bad or unchanged values send nothing.
+  function applyBaseline() {
+    const change = baselineChange(baselineN, appliedBaseline)
+    if (change.kind === 'invalid') {
+      setBaselineError(change.message)
+      return
+    }
+    setBaselineError(null)
+    if (change.kind === 'apply') run(file, dataset, specs, change.value)
   }
 
   function onFile(e) {
@@ -121,64 +153,131 @@ export default function App() {
   return (
     <>
       <header className="site-header">
-        <h1>AeroPrint</h1>
-        <p>Is the titanium-bracket print process in control and capable of the aerospace spec, since which build did it stop, and what should we do with each build?</p>
+        <div className="header-row">
+          <h1>AeroPrint</h1>
+          <div className="header-actions">
+            <a className="repo-link" href={REPO_URL} target="_blank" rel="noopener noreferrer">
+              {TEXT.githubLabel}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            <button type="button" className="tour-open" onClick={openTour}>Take the tour</button>
+          </div>
+        </div>
       </header>
 
+      {tourOpen && <Tour onClose={closeTour} />}
+
       <main>
-        <form className="controls" onSubmit={onSubmit} aria-label="Data and settings">
-          <div className="field">
-            <label htmlFor="dataset">Test dataset</label>
-            <select id="dataset" value={dataset} onChange={onDataset}>
-              {datasets.length === 0 && <option value={dataset}>{dataset}</option>}
-              {datasets.map((d) => (
-                <option key={d.name} value={d.name}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="csv">Use my own CSV</label>
-            <input id="csv" key={fileKey} type="file" accept=".csv,text/csv" onChange={onFile} />
-          </div>
-          <div className="field">
-            <label htmlFor="baseline">Baseline builds (min 5)</label>
-            <input id="baseline" type="number" min="5" step="1" value={baselineN}
-              onChange={(e) => setBaselineN(e.target.value === '' ? '' : Number(e.target.value))} />
-          </div>
-          {SPEC_FIELDS.map((f) => (
-            <div className="field" key={f.name}>
-              <label htmlFor={f.name}>{f.label}</label>
-              <input id={f.name} type="number" step="any" value={specs[f.name]} disabled={!file}
-                onChange={(e) => setSpecs({ ...specs, [f.name]: e.target.value })} />
+        <form className="controls" onSubmit={onSubmit} aria-label="Data and parameters">
+          <section className="card" aria-labelledby="dataset-h">
+            <h2 id="dataset-h" className="card-title">{TEXT.datasetHeading}</h2>
+            <div className="field">
+              <label htmlFor="dataset">{TEXT.datasetLabel}</label>
+              <select id="dataset" value={dataset} onChange={onDataset} aria-describedby="dataset-desc">
+                {datasets.length === 0 && <option value={dataset}>{datasetLabel(dataset)}</option>}
+                {datasets.map((d) => (
+                  <option key={d.name} value={d.name}>{datasetLabel(d.name)}</option>
+                ))}
+              </select>
+              <p id="dataset-desc" className="dataset-desc">
+                {file
+                  ? `Analyzing your file ${file.name} instead of ${datasetLabel(dataset)}.`
+                  : datasetText(dataset, describe(datasets, dataset))}
+              </p>
             </div>
-          ))}
-          <div className="field">
-            <button type="submit" disabled={loading || baselineN === '' || baselineN < 5}>Run again</button>
-          </div>
-          <p className="hint">
-            {file ? `Using your file: ${file.name}. ` : 'Spec limits can be changed when you upload your own CSV. '}
-            Limits are computed from the first {baselineN || '...'} builds.
-          </p>
+            <div className="field">
+              <label htmlFor="csv">{TEXT.fileLabel}</label>
+              <input id="csv" key={fileKey} type="file" accept=".csv,text/csv" onChange={onFile} />
+              {file && <p className="hint">Using your file: {file.name}.</p>}
+              <CsvHelp open={csvOpen} onOpenChange={changeCsvOpen} />
+            </div>
+          </section>
+
+          <section className="card" aria-labelledby="parameters-h">
+            <h2 id="parameters-h" className="card-title">{TEXT.parametersHeading}</h2>
+            {SPEC_FIELDS.filter((f) => !f.group).map((f) => (
+              <div className="field" key={f.name}>
+                <label htmlFor={f.name}>{f.label}</label>
+                <input id={f.name} type="number" step="any" value={specs[f.name]}
+                  onChange={(e) => setSpecs({ ...specs, [f.name]: e.target.value })} />
+              </div>
+            ))}
+            <div className="field-group">
+              <p className="group-heading" aria-hidden="true">{DIM_GROUP}</p>
+              <div className="field-row">
+                {SPEC_FIELDS.filter((f) => f.group).map((f) => (
+                  <div className="field" key={f.name}>
+                    <label htmlFor={f.name}>
+                      <span className="sr-only">{f.group}: </span>{f.short}
+                    </label>
+                    <input id={f.name} type="number" step="any" value={specs[f.name]}
+                      onChange={(e) => setSpecs({ ...specs, [f.name]: e.target.value })} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="button-row">
+              <button type="submit" disabled={loading || baselineChange(baselineN, null).kind === 'invalid'}>Run again</button>
+              <button type="button" className="secondary" onClick={onReset} title={TEXT.resetHint}>Reset to defaults</button>
+            </div>
+            {specError && <p className="error" role="alert" id="spec-error"><strong>Check the allowed values:</strong> {specError}</p>}
+          </section>
         </form>
 
         <div aria-live="polite">
           {loading && <p className="status">Loading analysis...</p>}
-          {error && <p className="error" role="alert"><strong>Could not analyze:</strong> {error}</p>}
+          {error && <ErrorBox message={error} />}
         </div>
 
-        {result && <Results result={result} />}
+        {result && <Summary result={result} />}
+        <ChartsSection result={result}>
+          <BaselineControl value={baselineN} error={baselineError} loading={loading}
+            onChange={(v) => { setBaselineN(v); setBaselineError(null) }} onApply={applyBaseline} />
+        </ChartsSection>
+        {result && <BuildTable builds={result.builds} hasParams={Object.keys(result.charts.imr).length > 0} />}
         <Legend />
       </main>
     </>
   )
 }
 
-function Results({ result }) {
+/** The plain-English hint (if we know the message) above the raw service text, which stays visible. */
+function ErrorBox({ message }) {
+  const hint = explainUploadError(message)
+  return (
+    <div className="error" role="alert">
+      <p className="hint-text"><strong>Could not analyze.</strong> {hint ?? message}</p>
+      {hint && <span className="raw-text">{TEXT.serviceMessage} {message}</span>}
+    </div>
+  )
+}
+
+/** The "Baseline builds" box. It lives in the Control charts section and stays visible while loading and after an error. */
+function BaselineControl({ value, error, loading, onChange, onApply }) {
+  return (
+    <div className="baseline-control">
+      <div className="field">
+        <label htmlFor="baseline">{TEXT.baselineLabel}</label>
+        <div className="baseline-row">
+          <input id="baseline" type="number" min={BASELINE_MIN} step="1" value={value} aria-describedby="baseline-desc"
+            aria-invalid={error ? 'true' : undefined}
+            onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onApply() } }}
+            onBlur={onApply} />
+          <button type="button" className="secondary" onClick={onApply} disabled={loading}>{TEXT.updateCharts}</button>
+        </div>
+        <p id="baseline-desc" className="helper">{TEXT.baselineHelp}</p>
+        {error && <p className="error" role="alert" id="baseline-error">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+function Summary({ result }) {
   const cap = result.capability
   const capable = result.process_capable
   const first = result.first_out_of_control_build
   const threshold = result.settings.capable_min_index
-  const baselineUsed = result.settings.baseline_n_used
 
   return (
     <>
@@ -194,9 +293,14 @@ function Results({ result }) {
           {QUALITY.map((q) => {
             const row = capabilityRow(cap[q.key], q.index)
             return (
-              <li key={q.key}>
+              <li key={q.key} className={row.unreliable ? 'unreliable' : ''}>
                 <span className="index-name">{q.indexName}</span>
                 <span className="index-value">{row.text}</span>
+                {row.unreliable && (
+                  <span className="index-warning">
+                    <span aria-hidden="true">⚠</span> {UNRELIABLE_TEXT}
+                  </span>
+                )}
                 <span className="index-meta">
                   {row.reliableLabel}; needs at least {fmt(threshold, 2)}
                   {row.message ? `. ${row.message}` : ''}
@@ -206,42 +310,57 @@ function Results({ result }) {
           })}
         </ul>
         <p className="how">
-          How to read this: a red point means that build behaved differently from the baseline builds;
-          an index of {fmt(threshold, 2)} or more means the process meets spec with margin, and it only counts while the chart is in control.
+          How to read this: {TEXT.howToRead.replace('{threshold}', fmt(threshold, 2))}
         </p>
         {result.warnings.length > 0 && (
           <details>
             <summary>Notes from the analysis ({result.warnings.length})</summary>
-            <ul>{result.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+            <ul className="notes-list">{result.warnings.map((w) => <li key={w}>{plainNote(w)}</li>)}</ul>
           </details>
         )}
       </section>
 
-      <section aria-labelledby="charts-h">
-        <h2 id="charts-h">Control charts</h2>
-        <p className="muted">Blue shading = baseline builds used for the limits. Red diamond = a rule was broken (hover for the build and rules).</p>
+      <p className="summary" id="summary">{summarySentence(result)}</p>
+    </>
+  )
+}
+
+/** The Control charts section. `result` is null while loading or after an error; the baseline box (children) stays. */
+function ChartsSection({ result, children }) {
+  const baselineUsed = result ? result.settings.baseline_n_used : null
+  const otherParams = result ? Object.keys(result.charts.imr).filter((n) => !MAIN_PARAMS.includes(n)) : []
+  const hasParams = result ? Object.keys(result.charts.imr).length > 0 : false
+  return (
+    <section aria-labelledby="charts-h">
+      <h2 id="charts-h">Control charts</h2>
+      <p className="muted">{TEXT.chartsIntro}</p>
+      {children}
+      {result && (
+        <>
         {QUALITY.filter((q) => q.key !== 'dimensional_dev_mm').map((q) => (
           <QualityCharts key={q.key} q={q} result={result} baselineUsed={baselineUsed} />
         ))}
         <details>
-          <summary>Dimensional deviation X-bar and R charts</summary>
+          <summary>{TEXT.dimensionalSummary}</summary>
           <QualityCharts q={QUALITY[2]} result={result} baselineUsed={baselineUsed} />
         </details>
 
-        <h2>Build parameters (I-MR charts)</h2>
-        {MAIN_PARAMS.map((name) => (
+        <h2>{TEXT.paramsHeading}</h2>
+        {!hasParams && <p className="param-note">{TEXT.noParams}</p>}
+        {MAIN_PARAMS.filter((name) => result.charts.imr[name]).map((name) => (
           <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} withMr />
         ))}
-        <details>
-          <summary>Other build parameters (I charts)</summary>
-          {Object.keys(result.charts.imr).filter((n) => !MAIN_PARAMS.includes(n)).map((name) => (
-            <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} />
-          ))}
-        </details>
-      </section>
-
-      <BuildTable builds={result.builds} />
-    </>
+        {otherParams.length > 0 && (
+          <details>
+            <summary>{TEXT.otherParamsSummary}</summary>
+            {otherParams.map((name) => (
+              <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} />
+            ))}
+          </details>
+        )}
+        </>
+      )}
+    </section>
   )
 }
 
@@ -251,9 +370,9 @@ function QualityCharts({ q, result, baselineUsed }) {
   const spec = specLines(result.settings.specs[q.key])
   return (
     <div className="chart-pair">
-      <ControlChart title={`${q.title} X-bar chart`} unit={q.unit} buildIds={ids} baselineN={baselineUsed}
+      <ControlChart title={chartTitle('xbar', q.title, q.unit)} kind="xbar" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
         digits={q.digits} {...xbarProps(chart, spec)} />
-      <ControlChart title={`${q.title} R chart`} unit={q.unit} buildIds={ids} baselineN={baselineUsed}
+      <ControlChart title={chartTitle('r', q.title, q.unit)} kind="r" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
         digits={q.digits} {...rProps(chart)} />
     </div>
   )
@@ -263,10 +382,10 @@ function ParamCharts({ name, p, ids, baselineUsed, withMr }) {
   const meta = PARAMS[name] || { title: name, unit: '', digits: 2 }
   return (
     <div className="chart-pair">
-      <ControlChart title={`${meta.title} I chart`} unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
+      <ControlChart title={chartTitle('i', meta.title, meta.unit)} kind="i" unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
         digits={meta.digits} {...iProps(p)} />
       {withMr && (
-        <ControlChart title={`${meta.title} moving range`} unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
+        <ControlChart title={chartTitle('mr', meta.title, meta.unit)} kind="mr" unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
           digits={meta.digits} {...mrProps(p)} />
       )}
     </div>
@@ -275,7 +394,7 @@ function ParamCharts({ name, p, ids, baselineUsed, withMr }) {
 
 const BADGE_ICON = { RELEASE: '✔', RETEST: '▲', QUARANTINE: '✖' }
 
-function BuildTable({ builds }) {
+function BuildTable({ builds, hasParams }) {
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const rows = onlyFlagged ? builds.filter((b) => b.disposition !== 'RELEASE') : builds
   return (
@@ -283,9 +402,10 @@ function BuildTable({ builds }) {
       <h2 id="table-h">Builds</h2>
       <label className="toggle">
         <input type="checkbox" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} />
-        Show only flagged builds (RETEST or QUARANTINE)
+        {TEXT.flaggedToggle}
       </label>
       <p className="muted">{rows.length} of {builds.length} builds shown.</p>
+      {!hasParams && <p className="muted">{TEXT.noParamsShort}</p>}
       <div className="table-wrap">
         <table>
           <thead>
@@ -306,9 +426,13 @@ function BuildTable({ builds }) {
                   <span className={`badge ${b.disposition.toLowerCase()}`}>
                     <span aria-hidden="true">{BADGE_ICON[b.disposition]}</span> {b.disposition}
                   </span>
-                  {b.any_coupon_out_of_spec && <div className="muted">a coupon is out of spec</div>}
+                  {b.any_coupon_out_of_spec && <div className="muted">{TEXT.couponOut}</div>}
                 </td>
-                <td>{b.rules_broken.length ? b.rules_broken.join('; ') : '-'}</td>
+                <td>
+                  {b.rules_broken.length
+                    ? <ul className="rules-list">{b.rules_broken.map((r) => <li key={r}>{explainRule(r)}</li>)}</ul>
+                    : '-'}
+                </td>
                 <td>{suspectText(b)}</td>
               </tr>
             ))}
@@ -323,17 +447,17 @@ function Legend() {
   return (
     <section aria-labelledby="legend-h" className="legend">
       <h2 id="legend-h">What the rules mean</h2>
-      <p>Each rule looks for a pattern that is unlikely when the process only has its usual random variation. The X-bar and I charts use all eight rules; the R and moving-range charts use rule 1 only.</p>
+      <p>{TEXT.legendIntro}</p>
       <ol>
-        {RULES.map(([n, text]) => <li key={n} value={n}><strong>Rule {n}.</strong> {text}</li>)}
+        {LEGEND_RULES.map(([n, text]) => <li key={n} value={n}><strong>Rule {n}.</strong> {text}</li>)}
       </ol>
       <p><strong>Disposition.</strong></p>
       <ul>
-        <li><strong>QUARANTINE</strong>: the build broke a rule on the UTS or porosity X-bar or R chart.</li>
-        <li><strong>RETEST</strong>: the charts are in control for this build, but at least one coupon is outside the spec.</li>
-        <li><strong>RELEASE</strong>: neither of the above.</li>
+        <li><strong>QUARANTINE</strong>: {TEXT.quarantine}</li>
+        <li><strong>RETEST</strong>: {TEXT.retest}</li>
+        <li><strong>RELEASE</strong>: {TEXT.release}</li>
       </ul>
-      <p className="muted">With eight rules running on many charts, an occasional chance alarm is expected even when nothing is wrong. Look for a build where several rules and several charts agree.</p>
+      <p className="muted">{TEXT.falseAlarms}</p>
     </section>
   )
 }

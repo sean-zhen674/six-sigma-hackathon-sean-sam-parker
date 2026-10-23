@@ -130,33 +130,52 @@ place to look. It is a ranking of charts, not a proof of cause (no regression or
 
 ## 5. Inputs
 
-One CSV, one row per coupon, 5 coupons per build, 19 columns. The full codebook (units, meaning,
-how the data would be collected for real) is in [`data/README.md`](data/README.md).
+One CSV, one row per coupon, **exactly 5 coupons per build**. Only **5 columns are required**; the
+8 print-parameter columns are optional; any other column is ignored. The step-by-step guide for
+preparing your own file, with two ready-to-use templates, is
+[`docs/csv-format.md`](docs/csv-format.md) (templates:
+[5 columns](data/template/aeroprint_template.csv),
+[with the 8 parameters](data/template/aeroprint_template_with_parameters.csv)). The codebook of the
+three sample files (units, meaning, how the data would be collected for real) is in
+[`data/README.md`](data/README.md).
 
-| Column | Type / unit | Level | Meaning |
-|---|---|---|---|
-| `build_id` | text | coupon | Build number, e.g. `B-1001`. Defines the subgroup of 5. |
-| `coupon_id` | text | coupon | Witness coupon id |
-| `build_timestamp` | ISO 8601 datetime | coupon | When the build ran; sets the time order |
-| `machine_id` | text | coupon | Printer id |
-| `material_lot` | text | coupon | Powder lot |
-| `uts_MPa` | MPa | coupon | Ultimate tensile strength. Spec: at least 900 |
-| `yield_MPa` | MPa | coupon | Yield strength |
-| `elongation_pct` | % | coupon | Elongation at break |
-| `porosity_pct` | % | coupon | Porosity. Spec: at most 0.5 |
-| `dimensional_dev_mm` | mm | coupon | Measured minus drawing dimension. Spec: within +/-0.10 |
-| `pass_fail` | True/False | coupon | Coupon passed all specs |
-| `laser_power_W` | W | build | Mean laser power (same on all 5 rows) |
-| `scan_speed_mm_s` | mm/s | build | Mean scan speed |
-| `layer_thickness_um` | um | build | Mean layer thickness |
-| `chamber_oxygen_ppm` | ppm | build | Mean chamber oxygen |
-| `humidity_pct` | % | build | Mean chamber humidity |
-| `powder_bed_temp_C` | deg C | build | Mean powder bed temperature |
-| `build_plate_temp_C` | deg C | build | Mean build plate temperature |
-| `stress_relief_temp_C` | deg C | build | Furnace temperature of the stress-relief heat treatment |
+**Required columns**
 
-Missing columns, empty cells (NaN), a build without exactly 5 coupons, or fewer than 2 builds give
-a clear error message (HTTP 422 from the API, `ValueError` from the functions).
+| Column | Type / unit | Meaning |
+|---|---|---|
+| `build_id` | text | Build number, e.g. `B-1001`. Defines the subgroup of 5. |
+| `build_timestamp` | ISO 8601 datetime | When the build ran; sets the time order |
+| `uts_MPa` | MPa | Ultimate tensile strength. Spec: at least 900 |
+| `porosity_pct` | % | Porosity. Spec: at most 0.5 |
+| `dimensional_dev_mm` | mm | Measured minus drawing dimension. Spec: within +/-0.10 |
+
+**Optional print-parameter columns.** Each one that is present gets an I-MR chart and takes part in
+"investigate first"; the ones that are absent are skipped, and the result lists them in
+`settings.parameters_missing` (with a warning). If a value differs between the rows of one build,
+the build's value is the mean of its rows.
+
+| Column | Unit | Meaning |
+|---|---|---|
+| `laser_power_W` | W | Mean laser power |
+| `scan_speed_mm_s` | mm/s | Mean scan speed |
+| `layer_thickness_um` | um | Mean layer thickness |
+| `chamber_oxygen_ppm` | ppm | Mean chamber oxygen |
+| `humidity_pct` | % | Mean chamber humidity |
+| `powder_bed_temp_C` | deg C | Mean powder bed temperature |
+| `build_plate_temp_C` | deg C | Mean build plate temperature |
+| `stress_relief_temp_C` | deg C | Furnace temperature of the stress-relief heat treatment |
+
+**Ignored columns.** Anything else (for example `coupon_id`, `machine_id`, `material_lot`,
+`yield_MPa`, `elongation_pct`, `pass_fail`; the sample files contain these as realistic extras) is
+never read, so blanks or text in it cannot cause an error.
+
+**Check your setup.** Upload `aeroprint_template.csv`: the UTS Cpl must come out as 3.877 (the
+hand-calculated known answer, section 4 of [`SPEC.md`](SPEC.md)). Then upload your own data.
+
+Missing required columns, text or empty cells in a column the tool uses, an unreadable
+`build_timestamp`, a build without exactly 5 coupons, or fewer than 2 builds give a clear error
+message (HTTP 422 from the API, `ValueError` from the functions). The dashboard adds a plain-English
+hint above the raw message. The messages are listed in [`docs/csv-format.md`](docs/csv-format.md).
 
 ### Spec limits (defaults, you can change them)
 
@@ -191,7 +210,7 @@ call them and display the result. Inputs and errors below come from the real sig
 | `imr(values, baseline_n=20)` | `values`: one number per build | `baseline_n` | dict: `points`, `moving_ranges`, `cl`, `mr_bar`, `sigma`, `ucl`, `lcl`, `mr_ucl`, `flags` (rules 1-8), `mr_flags` (rule 1), `baseline_n_used`, `message`. If MR-bar is 0, limits are `None` with a message | `ValueError`: fewer than 2 values, NaN, `baseline_n` < 2 |
 | `disposition(rules_broken, any_out_of_spec)` | `rules_broken`: per build, a list of rule texts; `any_out_of_spec`: per build, True/False | none | list of `"QUARANTINE"`, `"RETEST"` or `"RELEASE"`, one per build | `ValueError`: the two lists differ in length |
 | `rank_parameters(params_df, baseline_n=20)` | `params_df`: one row per build, in time order, one column per build parameter | `baseline_n` | dict: `charts` (I-MR per parameter), `ranking` ({build index: parameters sorted by largest abs z}), `skipped` (parameters with zero baseline sigma) | `ValueError` from `imr` (fewer than 2 builds, NaN) |
-| `analyze(df, specs=None, baseline_n=20)` | `df`: coupon table with the 19 columns | `specs`: optional spec overrides; `baseline_n` | JSON-safe dict: `build_ids`, `charts`, `capability`, `process_capable`, `first_out_of_control_build`, `builds` (disposition, rules broken, investigate first), `warnings`, `settings` | `ValueError`: missing columns, NaN, bad `build_timestamp`, unknown spec column, and every error from `xbar_r` |
+| `analyze(df, specs=None, baseline_n=20)` | `df`: coupon table with the 5 required columns (+ optional print parameters; other columns ignored) | `specs`: optional spec overrides; `baseline_n` | JSON-safe dict: `build_ids`, `charts`, `capability`, `process_capable`, `first_out_of_control_build`, `builds` (disposition, rules broken, investigate first), `warnings`, `settings` | `ValueError`: missing required columns, text or blank cells in a used column, bad `build_timestamp`, a build without exactly 5 coupons, unknown spec column, and every error from `xbar_r` |
 
 `analyze()` runs the others in this order: sort builds by time, X-bar/R and capability and
 normality for each of UTS, porosity and dimensional deviation, I-MR and ranking for the build
@@ -256,7 +275,7 @@ curl -F file=@data/oxygen_drift.csv "http://localhost:8000/analyze?baseline_n=20
 # same JSON shape, UTS Cpl is now -1.04 because the lower limit is 990
 
 curl -F file=@bad.csv http://localhost:8000/analyze     # a CSV with columns a,b only
-# {"detail":"missing required columns: build_id, coupon_id, ..."}   (HTTP 422)
+# {"detail":"missing required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm"}   (HTTP 422)
 ```
 
 Each `builds` entry looks like this (real output for B-1023 of `oxygen_drift`):

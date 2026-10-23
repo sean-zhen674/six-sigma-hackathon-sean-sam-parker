@@ -12,25 +12,32 @@ have: 30 builds, 5 witness coupons per build, one row per coupon (150 rows per f
 | `oxygen_drift.csv` | Chamber oxygen creeps up linearly from build 21 (about 100 to 430 ppm). UTS falls and porosity rises; in the tool's output the first out-of-control build is B-1023, and "investigate first" lists chamber oxygen on top for every flagged build. |
 | `laser_power_excursion.csv` | Laser power drops about 15 % (to about 238 W) on builds 24, 25 and 26 only. Porosity spikes above its upper limit and UTS dips on those builds (rule 1), then recovers. The first out-of-control build is B-1024 and "investigate first" puts laser power on top for builds 1024-1026. |
 
-## Columns (19, in this order)
+## Columns (19 in the sample files, in this order)
+
+**The tool needs only 5 of these 19.** Required: `build_id`, `build_timestamp`, `uts_MPa`,
+`porosity_pct`, `dimensional_dev_mm`. Optional: the 8 build-level print parameters below. The other
+six columns (`coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`)
+are **not used by the tool; kept as realistic extras** (a real lab export has them). Templates with
+only the needed columns, and the upload rules, are in [`template/`](template/) and
+[`../docs/csv-format.md`](../docs/csv-format.md).
 
 Coupon-level columns (differ per row):
 
 | Column | Type | Unit | Meaning |
 |---|---|---|---|
 | `build_id` | text | - | Build number, `B-1001` to `B-1030`. Defines the subgroup of 5 coupons. |
-| `coupon_id` | text | - | Witness coupon, `C-<build number>-01` to `-05`. |
+| `coupon_id` | text | - | Witness coupon, `C-<build number>-01` to `-05`. *Not used by the tool; kept as a realistic extra.* |
 | `build_timestamp` | ISO 8601 datetime | - | When the build ran; one build every 2 days from 2026-01-05. Used for time order. |
-| `machine_id` | text | - | Printer, `AM-01` or `AM-02` (alternating blocks of 5 builds). |
-| `material_lot` | text | - | Powder lot, `Ti64-Lot-21`, `-22`, `-23` (changes every 10 builds). |
+| `machine_id` | text | - | Printer, `AM-01` or `AM-02` (alternating blocks of 5 builds). *Not used by the tool; kept as a realistic extra.* |
+| `material_lot` | text | - | Powder lot, `Ti64-Lot-21`, `-22`, `-23` (changes every 10 builds). *Not used by the tool; kept as a realistic extra.* |
 | `uts_MPa` | number | MPa | Ultimate tensile strength from the tensile test. Spec: at least 900 (target 950). |
-| `yield_MPa` | number | MPa | Yield strength from the same tensile test. |
-| `elongation_pct` | number | % | Elongation at break from the same tensile test. |
+| `yield_MPa` | number | MPa | Yield strength from the same tensile test. *Not used by the tool; kept as a realistic extra.* |
+| `elongation_pct` | number | % | Elongation at break from the same tensile test. *Not used by the tool; kept as a realistic extra.* |
 | `porosity_pct` | number | % | Porosity (void fraction) of the coupon. Spec: at most 0.5 (target 0.2). |
 | `dimensional_dev_mm` | number | mm | Measured dimension minus drawing dimension. Spec: within +/-0.10 (target 0). |
-| `pass_fail` | True/False | - | True only if UTS >= 900, porosity <= 0.5 and abs(dimensional_dev) <= 0.10. |
+| `pass_fail` | True/False | - | True only if UTS >= 900, porosity <= 0.5 and abs(dimensional_dev) <= 0.10. *Not used by the tool; kept as a realistic extra.* |
 
-Build-level columns (the same value on all 5 rows of a build):
+Build-level columns (the same value on all 5 rows of a build). The tool treats these 8 as **optional**:
 
 | Column | Type | Unit | Meaning |
 |---|---|---|---|
@@ -42,6 +49,14 @@ Build-level columns (the same value on all 5 rows of a build):
 | `powder_bed_temp_C` | number | deg C | Mean powder bed temperature (nominal about 180). |
 | `build_plate_temp_C` | number | deg C | Mean build plate temperature (nominal about 200). |
 | `stress_relief_temp_C` | number | deg C | Furnace temperature of the stress-relief heat treatment after the build (nominal about 650). |
+
+## Templates for your own data
+
+[`template/aeroprint_template.csv`](template/aeroprint_template.csv) has only the 5 required columns and
+the 3 builds (15 rows) of the hand calculation in `SPEC.md` section 4; its UTS Cpl is 3.877.
+[`template/aeroprint_template_with_parameters.csv`](template/aeroprint_template_with_parameters.csv) adds
+the 8 optional parameter columns. The values are invented. They live in `template/` (not next to the
+three sample files) so the "3 sample datasets" count stays true. Guide: [`../docs/csv-format.md`](../docs/csv-format.md).
 
 ## Spec limits used
 

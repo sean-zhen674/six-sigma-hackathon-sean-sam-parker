@@ -106,10 +106,11 @@ def test_baseline_n_below_5_is_rejected():
 
 
 def test_missing_column_is_422_and_names_it():
-    df = pd.read_csv(DATA / "capable_baseline.csv").drop(columns=["humidity_pct"])
+    df = pd.read_csv(DATA / "capable_baseline.csv").drop(columns=["uts_MPa"])
     r = post_csv(df.to_csv(index=False).encode())
     assert r.status_code == 422
-    assert "humidity_pct" in r.json()["detail"]
+    assert "missing required columns" in r.json()["detail"]
+    assert "uts_MPa" in r.json()["detail"]
 
 
 def test_build_with_four_coupons_is_422():
@@ -185,3 +186,152 @@ def test_imports_work_inside_a_bundle(tmp_path):
     out = subprocess.run([sys.executable, "-c", code], cwd=bundle, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert "bundle ok" in out.stdout
+
+
+# ---- H-09: GET /analyze/{dataset} takes the same spec parameters as POST /analyze ----
+
+def test_get_with_uts_lsl_equals_post_with_uts_lsl():
+    content = (DATA / "oxygen_drift.csv").read_bytes()
+    got = client.get("/analyze/oxygen_drift", params={"uts_lsl": 990})
+    posted = post_csv(content, uts_lsl=990)
+    assert got.status_code == 200
+    assert got.json() == posted.json()
+    assert got.json()["capability"]["uts_MPa"]["cpl"] == pytest.approx(-1.04, abs=0.005)
+
+
+def test_get_with_all_spec_parameters_equals_post():
+    content = (DATA / "laser_power_excursion.csv").read_bytes()
+    params = {"baseline_n": 15, "uts_lsl": 920, "porosity_usl": 0.4, "dim_lsl": -0.2, "dim_usl": 0.2}
+    assert client.get("/analyze/laser_power_excursion", params=params).json() == post_csv(content, **params).json()
+
+
+def test_get_without_spec_parameters_keeps_the_defaults():
+    body = client.get("/analyze/oxygen_drift").json()
+    assert body["settings"]["specs"]["uts_MPa"]["lsl"] == 900.0
+    assert body["capability"]["uts_MPa"]["cpl"] == pytest.approx(4.64, abs=0.005)
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_dim_lsl_not_below_dim_usl_is_422_with_a_message(method):
+    params = {"dim_lsl": 0.2, "dim_usl": 0.1}
+    if method == "get":
+        r = client.get("/analyze/oxygen_drift", params=params)
+    else:
+        r = post_csv((DATA / "oxygen_drift.csv").read_bytes(), **params)
+    assert r.status_code == 422
+    assert "usl must be greater than lsl" in r.json()["detail"]
+
+
+def test_get_with_baseline_n_3_is_422():
+    assert client.get("/analyze/oxygen_drift", params={"baseline_n": 3}).status_code == 422
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
+def test_non_finite_spec_limit_is_422(bad):
+    r = client.get("/analyze/oxygen_drift", params={"uts_lsl": bad})
+    assert r.status_code == 422
+    assert "uts_lsl" in str(r.json()["detail"])
+
+
+# ---- H-10: minimal upload format ----
+
+TEMPLATES = ROOT / "data" / "template"
+
+
+def test_minimal_template_upload_gives_the_known_answer():
+    r = post_csv((TEMPLATES / "aeroprint_template.csv").read_bytes())
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["capability"]["uts_MPa"]["cpl"] == pytest.approx(3.877, abs=0.0005)
+    assert body["charts"]["uts_MPa"]["xbar"]["cl"] == pytest.approx(950.0)
+    assert body["charts"]["imr"] == {}
+    assert body["settings"]["parameters_used"] == []
+    assert len(body["settings"]["parameters_missing"]) == 8
+    assert any("No print-parameter columns found" in w for w in body["warnings"])
+
+
+def test_template_with_parameters_upload_uses_all_eight():
+    r = post_csv((TEMPLATES / "aeroprint_template_with_parameters.csv").read_bytes())
+    assert r.status_code == 200, r.text
+    assert len(r.json()["settings"]["parameters_used"]) == 8
+    assert len(r.json()["charts"]["imr"]) == 8
+
+
+def test_five_column_upload_of_a_sample_dataset_is_200_and_ignores_extras():
+    df = pd.read_csv(DATA / "oxygen_drift.csv")
+    five = df[["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]]
+    r = post_csv(five.to_csv(index=False).encode())
+    assert r.status_code == 200
+    full = client.get("/analyze/oxygen_drift").json()
+    assert r.json()["charts"]["uts_MPa"] == full["charts"]["uts_MPa"]
+    df.loc[0, "yield_MPa"] = None  # a blank in an ignored column
+    assert post_csv(df.to_csv(index=False).encode()).status_code == 200
+
+
+def _bad_upload(mutate):
+    df = mutate(pd.read_csv(TEMPLATES / "aeroprint_template.csv"))
+    r = post_csv(df.to_csv(index=False).encode())
+    assert r.status_code == 422
+    return r.json()["detail"]
+
+
+def test_bad_files_are_422_with_the_specific_text():
+    assert "missing required columns: porosity_pct" in _bad_upload(lambda d: d.drop(columns=["porosity_pct"]))
+    assert "build B-0002 has 4 coupons; each build needs exactly 5" in _bad_upload(lambda d: d.drop(index=7))
+
+    def text(d):
+        d["uts_MPa"] = d["uts_MPa"].astype(object)
+        d.loc[2, "uts_MPa"] = "abc"
+        return d
+    assert "column 'uts_MPa' has non-numeric text, for example 'abc'" in _bad_upload(text)
+
+    def blank(d):
+        d.loc[2, "porosity_pct"] = None
+        return d
+    assert "column 'porosity_pct' has 1 blank or missing values" in _bad_upload(blank)
+
+    def stamp(d):
+        d["build_timestamp"] = d["build_timestamp"].astype(object)
+        d.loc[0, "build_timestamp"] = "not a date"
+        return d
+    assert "build_timestamp is not a valid date/time" in _bad_upload(stamp)
+
+
+# ---- H-10 review fixes: odd data is a 422 with a message, never a 500 ----
+
+def _upload_df(df):
+    return post_csv(df.to_csv(index=False).encode())
+
+
+def test_true_false_column_is_422_through_the_api():
+    df = pd.read_csv(TEMPLATES / "aeroprint_template.csv")
+    df["uts_MPa"] = [True, False] * 7 + [True]
+    r = _upload_df(df)
+    assert r.status_code == 422
+    assert "contains True/False values; it must contain numbers" in r.json()["detail"]
+
+
+def test_infinite_value_is_422_through_the_api():
+    r = post_csv(b"build_id,build_timestamp,uts_MPa,porosity_pct,dimensional_dev_mm\n"
+                 b"A,2026-01-01,inf,0.2,0.01\n")
+    assert r.status_code == 422
+    assert "infinite value (row 2 of the file)" in r.json()["detail"]
+    df = pd.read_csv(TEMPLATES / "aeroprint_template.csv").astype({"uts_MPa": float})
+    df.loc[6, "uts_MPa"] = float("inf")
+    r = _upload_df(df)
+    assert r.status_code == 422 and "row 8 of the file" in r.json()["detail"]
+
+
+def test_header_only_file_is_422_through_the_api():
+    r = post_csv(b"build_id,build_timestamp,uts_MPa,porosity_pct,dimensional_dev_mm\n")
+    assert r.status_code == 422
+    assert "the file has a header but no data rows" in r.json()["detail"]
+
+
+def test_shared_timestamps_are_a_warning_not_an_error_through_the_api():
+    df = pd.read_csv(TEMPLATES / "aeroprint_template.csv")
+    df.loc[df["build_id"] == "B-0002", "build_timestamp"] = df["build_timestamp"].iloc[0]
+    r = _upload_df(df)
+    assert r.status_code == 200
+    assert any("2 builds share the same build_timestamp (for example B-0001 and B-0002)" in w
+               for w in r.json()["warnings"])

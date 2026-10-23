@@ -15,3 +15,6 @@ rsconnect/
 
 # extra virtual environments (e.g. .venv312 for the Connect manifest, written with Python 3.12)
 .venv*/
+
+# browser-tool scratch output
+.playwright-mcp/

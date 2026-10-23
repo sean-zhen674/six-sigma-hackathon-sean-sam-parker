@@ -31,13 +31,16 @@ The examples after each `FILL IN` show the shape of an answer. They are not hint
   drifting parameter so they can fix it.
 
 ## 3. Inputs (rubric: minimal inputs 5)
+Full upload guide with templates: [`docs/csv-format.md`](docs/csv-format.md) (templates in [`data/template/`](data/template/)).
+
 Only what this user can actually measure or already knows. Fewer is better; every input a user
 cannot measure costs points.
 
 | Input | Type and units | Where the user gets it |
 |---|---|---|
-| ONE CSV, one row per coupon, 5 coupons per build. Coupon results: `build_id`, `coupon_id`, `build_timestamp`, `machine_id`, `material_lot`, `uts_MPa`, `yield_MPa`, `elongation_pct`, `porosity_pct`, `dimensional_dev_mm`, `pass_fail` | text IDs, ISO 8601 time; MPa, %, mm; pass/fail | the coupon test lab's report (LIMS export) |
-| ...and on the same row, that build's parameters (the same value on all 5 coupon rows): `laser_power_W`, `scan_speed_mm_s`, `layer_thickness_um`, `chamber_oxygen_ppm`, `humidity_pct`, `powder_bed_temp_C`, `build_plate_temp_C` (each the mean over the build's layer log), `stress_relief_temp_C` (post-process) | W, mm/s, µm, ppm, %, °C | the printer's layer log averaged per build, and the heat-treat furnace record, joined on `build_id` |
+| ONE CSV, one row per coupon, exactly 5 coupons per build. **5 required columns:** `build_id`, `build_timestamp`, `uts_MPa`, `porosity_pct`, `dimensional_dev_mm` | text ID, ISO 8601 time; MPa, %, mm | the coupon test lab's report (LIMS export) and the build record |
+| **8 optional print-parameter columns** (the same value on all 5 coupon rows, or raw values that the tool averages per build): `laser_power_W`, `scan_speed_mm_s`, `layer_thickness_um`, `chamber_oxygen_ppm`, `humidity_pct`, `powder_bed_temp_C`, `build_plate_temp_C` (each the mean over the build's layer log), `stress_relief_temp_C` (post-process). Each one present gets an I-MR chart and joins "investigate first"; absent ones are skipped and named in `settings.parameters_missing` | W, mm/s, µm, ppm, %, °C | the printer's layer log averaged per build, and the heat-treat furnace record, joined on `build_id` |
+| Any other column (`coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes, ...) | anything | **ignored**: never read, so blanks or text in it cannot cause an error. The three sample files keep these as realistic extras |
 | Spec limits (defaults built in, user can edit) | UTS LSL 900 MPa (target 950); porosity USL 0.5 % (target 0.2); dimensional deviation ±0.10 mm | the client's purchase spec / drawing |
 
 ## 4. The statistics, and why (rubric: valid QC analysis 25)
@@ -117,7 +120,7 @@ Fixed for every team:
   - a banner "Process capable: YES / NO", with Cpl for UTS, Cpu for porosity and Cpk for
     dimensional deviation (unitless; ≥ 1.33 = capable), plus the first build where it stopped being in control;
   - X-bar and R charts for UTS (MPa) and porosity (%), with rule-breaking builds in red;
-  - I-MR charts for chamber oxygen (ppm) and laser power (W);
+  - I-MR charts for chamber oxygen (ppm) and laser power (W), plus any other print-parameter column in the file (a file without parameter columns shows none and says the cause is not ranked);
   - a build table: build_id, RELEASE / RETEST / QUARANTINE, the rule broken, and "investigate first: <parameter>".
   How to read this: "A red point means that build behaved differently from the baseline builds;
   an index of 1.33 or more means the process meets spec with margin, and only counts while the chart is in control."

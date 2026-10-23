@@ -313,3 +313,277 @@ def test_rank_parameters_skips_constant_parameter():
     assert "laser_power_W" in out["skipped"]
     assert "zero" in out["skipped"]["laser_power_W"]
     assert out["ranking"][6][0]["parameter"] == "chamber_oxygen_ppm"
+
+
+# ---------------------------------------------------------------------------
+# 5. H-10: minimal upload format (5 required columns, optional parameters, extras ignored)
+# ---------------------------------------------------------------------------
+from pathlib import Path  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent
+MINIMAL = ["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]
+PARAM_NAMES = list(PARAMS)
+
+
+def minimal_frame(n_builds=30, **kw):
+    """The synthetic data cut down to the 5 required columns."""
+    return synthetic(n_builds=n_builds, **kw)[MINIMAL]
+
+
+def test_five_column_file_equals_full_file_for_the_quality_statistics():
+    full = analyze(synthetic())
+    small = analyze(minimal_frame())
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        assert small["charts"][col] == full["charts"][col]
+        assert small["capability"][col] == full["capability"][col]
+    assert [b["disposition"] for b in small["builds"]] == [b["disposition"] for b in full["builds"]]
+    assert [b["rules_broken"] for b in small["builds"]] == [b["rules_broken"] for b in full["builds"]]
+    assert small["charts"]["imr"] == {}
+    assert small["settings"]["parameters_used"] == []
+    assert small["settings"]["parameters_missing"] == PARAM_NAMES
+
+
+def test_no_parameter_columns_gives_empty_investigate_first_and_a_warning():
+    result = analyze(minimal_frame())
+    assert all(b["investigate_first"] == [] for b in result["builds"])
+    assert 'No print-parameter columns found: the "investigate first" ranking is skipped.' in result["warnings"]
+    assert result["builds"][24]["disposition"] == "QUARANTINE"  # still flagged by UTS
+    json.dumps(result, allow_nan=False)
+
+
+def test_only_one_parameter_column_gives_one_chart_and_names_only_it():
+    df = synthetic()[MINIMAL + ["chamber_oxygen_ppm"]]
+    result = analyze(df)
+    assert list(result["charts"]["imr"]) == ["chamber_oxygen_ppm"]
+    assert result["settings"]["parameters_used"] == ["chamber_oxygen_ppm"]
+    assert len(result["settings"]["parameters_missing"]) == 7
+    named = {p["parameter"] for b in result["builds"] for p in b["investigate_first"]}
+    assert named == {"chamber_oxygen_ppm"}
+    assert any(w.startswith("Print-parameter columns not found") and "laser_power_W" in w
+               for w in result["warnings"])
+
+
+def test_all_parameters_present_adds_no_missing_warning():
+    result = analyze(synthetic())
+    assert result["settings"]["parameters_missing"] == []
+    assert result["settings"]["parameters_used"] == PARAM_NAMES
+    assert not any("rint-parameter" in w for w in result["warnings"])
+
+
+def test_parameter_that_varies_inside_a_build_is_averaged():
+    df = minimal_frame(n_builds=6)
+    # oxygen differs per coupon (90..110, mean 100); each build is shifted by 0, 2, -1, 1, 0, 50
+    ox = np.tile([90.0, 95.0, 100.0, 105.0, 110.0], 6) + np.repeat([0, 2, -1, 1, 0, 50], 5)
+    df["chamber_oxygen_ppm"] = ox
+    chart = analyze(df, baseline_n=5)["charts"]["imr"]["chamber_oxygen_ppm"]
+    assert chart["points"] == pytest.approx([100.0, 102.0, 99.0, 101.0, 100.0, 150.0])
+
+
+def test_ignored_columns_may_hold_nan_or_junk():
+    df = synthetic()
+    df.loc[0, "yield_MPa"] = np.nan
+    df.loc[1, "pass_fail"] = np.nan
+    df.loc[2, "machine_id"] = np.nan
+    df["coupon_id"] = "text, with, commas"
+    df["notes"] = [None if i % 2 else "free text" for i in range(len(df))]
+    df["junk_numbers"] = 1.0
+    assert analyze(df) == analyze(synthetic())
+
+
+def test_missing_required_columns_are_named():
+    df = minimal_frame().drop(columns=["uts_MPa", "build_timestamp"])
+    with pytest.raises(ValueError) as err:
+        analyze(df)
+    assert "missing required columns" in str(err.value)
+    assert "uts_MPa" in str(err.value) and "build_timestamp" in str(err.value)
+
+
+def test_non_numeric_text_names_column_and_value():
+    df = minimal_frame()
+    df["porosity_pct"] = df["porosity_pct"].astype(object)
+    df.loc[7, "porosity_pct"] = "0.2 %"
+    with pytest.raises(ValueError, match=r"porosity_pct.*non-numeric.*'0\.2 %'"):
+        analyze(df)
+
+
+def test_non_numeric_text_in_an_optional_parameter_is_also_rejected():
+    df = synthetic()[MINIMAL + ["humidity_pct"]]
+    df["humidity_pct"] = df["humidity_pct"].astype(object)
+    df.loc[4, "humidity_pct"] = "damp"
+    with pytest.raises(ValueError, match=r"humidity_pct.*non-numeric.*'damp'"):
+        analyze(df)
+
+
+def test_blank_in_a_used_column_names_the_column():
+    df = minimal_frame()
+    df.loc[3, "dimensional_dev_mm"] = np.nan
+    with pytest.raises(ValueError, match=r"dimensional_dev_mm.*blank or missing.*row 5"):
+        analyze(df)
+    df = synthetic()
+    df.loc[3, "scan_speed_mm_s"] = np.nan
+    with pytest.raises(ValueError, match="scan_speed_mm_s"):
+        analyze(df)
+
+
+def test_unparseable_timestamp_is_named():
+    df = minimal_frame()
+    df["build_timestamp"] = df["build_timestamp"].astype(object)
+    df.loc[0, "build_timestamp"] = "last Tuesday"
+    with pytest.raises(ValueError, match=r"build_timestamp is not a valid date/time.*last Tuesday"):
+        analyze(df)
+
+
+def test_four_coupon_build_names_build_and_count():
+    df = minimal_frame().drop(index=7)
+    with pytest.raises(ValueError) as err:
+        analyze(df)
+    assert "build B02 has 4 coupons; each build needs exactly 5 coupons" in str(err.value)
+    df = pd.concat([minimal_frame(), minimal_frame().iloc[[0]]])  # B01 now has 6
+    with pytest.raises(ValueError, match="build B01 has 6 coupons"):
+        analyze(df)
+
+
+def test_known_answer_through_the_minimal_template():
+    """SPEC section 4 builds, uploaded as the 5-column template: Xbarbar 950, Cpl 3.877."""
+    df = pd.read_csv(ROOT / "data" / "template" / "aeroprint_template.csv")
+    assert list(df.columns) == MINIMAL and len(df) == 15
+    result = analyze(df)
+    uts = result["charts"]["uts_MPa"]
+    assert uts["xbar"]["cl"] == pytest.approx(950.0)
+    assert uts["xbar"]["ucl"] == pytest.approx(955.77, abs=0.005)
+    assert uts["xbar"]["lcl"] == pytest.approx(944.23, abs=0.005)
+    assert uts["r"]["ucl"] == pytest.approx(21.14, abs=0.005)
+    assert result["capability"]["uts_MPa"]["cpl"] == pytest.approx(3.877, abs=0.0005)
+    assert [b["disposition"] for b in result["builds"]] == ["RELEASE"] * 3
+
+
+def test_template_with_parameters_uses_all_eight():
+    df = pd.read_csv(ROOT / "data" / "template" / "aeroprint_template_with_parameters.csv")
+    result = analyze(df)
+    assert result["settings"]["parameters_used"] == PARAM_NAMES
+    assert result["capability"]["uts_MPa"]["cpl"] == pytest.approx(3.877, abs=0.0005)
+
+
+# H-10 regression: the three sample datasets must give the numbers they gave before the change.
+SAMPLES = {
+    # name: (process_capable, first out of control, top suspect, Cpl uts, Cpu porosity, Cpk dimensional)
+    "capable_baseline": (True, None, None, 4.810, 3.695, 1.792),
+    "oxygen_drift": (False, "B-1023", "chamber_oxygen_ppm", 4.635, 3.511, 1.416),
+    "laser_power_excursion": (False, "B-1024", "laser_power_W", 5.036, 3.538, 1.676),
+}
+
+
+@pytest.mark.parametrize("name", list(SAMPLES))
+def test_sample_datasets_keep_their_numbers(name):
+    capable, first, suspect, cpl, cpu, cpk = SAMPLES[name]
+    result = analyze(pd.read_csv(ROOT / "data" / f"{name}.csv"))
+    assert result["process_capable"] is capable
+    assert result["first_out_of_control_build"] == first
+    cap = result["capability"]
+    assert cap["uts_MPa"]["cpl"] == pytest.approx(cpl, abs=0.0005)
+    assert cap["porosity_pct"]["cpu"] == pytest.approx(cpu, abs=0.0005)
+    assert cap["dimensional_dev_mm"]["cpk"] == pytest.approx(cpk, abs=0.0005)
+    assert len(result["settings"]["parameters_used"]) == 8
+    if suspect:
+        build = next(b for b in result["builds"] if b["build_id"] == first)
+        assert build["investigate_first"][0]["parameter"] == suspect
+
+
+# ---------------------------------------------------------------------------
+# 6. H-10 review fixes: infinite values, True/False and other odd columns, shared timestamps
+# ---------------------------------------------------------------------------
+import warnings as _warnings  # noqa: E402
+
+
+def test_infinite_value_in_a_required_column_names_column_and_row():
+    df = minimal_frame()
+    df["uts_MPa"] = df["uts_MPa"].astype(float)
+    df.loc[5, "uts_MPa"] = np.inf
+    with pytest.raises(ValueError) as err:
+        analyze(df)
+    assert "column 'uts_MPa' has an infinite value (row 7 of the file); use ordinary numbers" in str(err.value)
+    df.loc[5, "uts_MPa"] = -np.inf
+    with pytest.raises(ValueError, match="infinite value"):
+        analyze(df)
+
+
+def test_too_large_number_counts_as_infinite_in_an_optional_column():
+    df = synthetic()[MINIMAL + ["humidity_pct"]]
+    df["humidity_pct"] = df["humidity_pct"].astype(object)
+    df.loc[2, "humidity_pct"] = "1e400"  # larger than any float: becomes inf
+    with pytest.raises(ValueError, match=r"column 'humidity_pct' has an infinite value \(row 4 of the file\)"):
+        analyze(df)
+    df = synthetic()[MINIMAL + ["humidity_pct"]]
+    df.loc[2, "humidity_pct"] = np.inf
+    with pytest.raises(ValueError, match="humidity_pct.*infinite"):
+        analyze(df)
+
+
+def test_true_false_column_is_a_value_error_not_a_type_error():
+    df = minimal_frame()
+    df["uts_MPa"] = [True, False] * 75
+    with pytest.raises(ValueError, match="column 'uts_MPa' contains True/False values; it must contain numbers"):
+        analyze(df)
+    df = synthetic()[MINIMAL + ["laser_power_W"]]
+    df["laser_power_W"] = df["laser_power_W"].astype(object)
+    df.loc[0, "laser_power_W"] = True  # one True in an otherwise numeric (object) column
+    with pytest.raises(ValueError, match="laser_power_W.*True/False"):
+        analyze(df)
+
+
+def test_other_odd_columns_are_value_errors():
+    df = minimal_frame()
+    df["porosity_pct"] = [1 + 2j] * 150
+    with pytest.raises(ValueError, match="porosity_pct"):
+        analyze(df)
+    df = minimal_frame()
+    df["uts_MPa"] = pd.to_datetime(["2026-01-01"] * 150)
+    with pytest.raises(ValueError, match="column 'uts_MPa' contains dates or times; it must contain numbers"):
+        analyze(df)
+    df = minimal_frame()
+    df["uts_MPa"] = [[1, 2]] * 150
+    with pytest.raises(ValueError, match="uts_MPa"):
+        analyze(df)
+    df = pd.concat([minimal_frame(), minimal_frame()[["uts_MPa"]]], axis=1)  # header lists uts_MPa twice
+    with pytest.raises(ValueError, match="column 'uts_MPa' appears 2 times in the header; keep only one"):
+        analyze(df)
+
+
+def test_header_only_file():
+    with pytest.raises(ValueError, match="the file has a header but no data rows"):
+        analyze(minimal_frame().iloc[0:0])
+
+
+def test_bad_timestamp_message_is_short_and_raises_no_pandas_warning():
+    df = minimal_frame()
+    df["build_timestamp"] = df["build_timestamp"].astype(object)
+    df.loc[0, "build_timestamp"] = "last Tuesday"
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")  # any pandas UserWarning would fail the test
+        with pytest.raises(ValueError) as err:
+            analyze(df)
+    assert str(err.value) == ("build_timestamp is not a valid date/time (for example 'last Tuesday'); "
+                              "use a form like 2026-01-05T08:00:00")
+
+
+def test_shared_timestamps_give_a_warning_and_change_nothing_else():
+    df = minimal_frame(n_builds=10)
+    df.loc[df["build_id"] == "B02", "build_timestamp"] = df.loc[df["build_id"] == "B01", "build_timestamp"].iloc[0]
+    result = analyze(df, baseline_n=5)
+    expected = ("2 builds share the same build_timestamp (for example B01 and B02); builds with the same "
+                "timestamp are ordered by their position in the file, which changes which builds form the "
+                "baseline. Give every build its own timestamp.")
+    assert expected in result["warnings"]
+    assert result["build_ids"][:2] == ["B01", "B02"]  # ties keep the file order
+    # remove only that warning: everything else equals the run with the same data and distinct timestamps
+    clean = analyze(minimal_frame(n_builds=10), baseline_n=5)
+    assert not any("share the same build_timestamp" in w for w in clean["warnings"])
+    assert [w for w in result["warnings"] if w != expected] == clean["warnings"]
+    assert result["capability"]["porosity_pct"] == clean["capability"]["porosity_pct"]
+    assert result["charts"]["uts_MPa"]["r"] == clean["charts"]["uts_MPa"]["r"]
+
+
+def test_samples_and_templates_have_no_timestamp_tie_warning():
+    for name in SAMPLES:
+        result = analyze(pd.read_csv(ROOT / "data" / f"{name}.csv"))
+        assert not any("share the same build_timestamp" in w for w in result["warnings"])

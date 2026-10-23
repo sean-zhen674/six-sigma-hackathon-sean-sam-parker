@@ -23,7 +23,7 @@ npm install
 npm run dev                   # http://localhost:5173
 ```
 
-Pick a test dataset, or upload your own CSV (columns: see [`../../data/README.md`](../../data/README.md)).
+Use *Select an example dataset*, or *Upload dataset* for your own CSV (5 required columns, optional print parameters, extra columns ignored: see [`../../docs/csv-format.md`](../../docs/csv-format.md); the *How should my file be formatted?* button under *Upload dataset* opens a popup that links two template CSVs, which live in `public/` and are copies of `../../data/template/`).
 A walkthrough of all three datasets, with screenshots, is in [`../../demo/README.md`](../../demo/README.md).
 
 ## Files
@@ -34,7 +34,7 @@ A walkthrough of all three datasets, with screenshots, is in [`../../demo/README
 | `src/api.js` | calls `/datasets`, `/spec-limits`, `/analyze` |
 | `src/App.jsx` | the page: controls, banner, charts, build table, rule legend |
 | `src/ControlChart.jsx` | one control chart drawn as inline SVG |
-| `src/format.js`, `src/scale.js` | number formatting and axis scaling (no statistics), with tests |
+| `src/format.js`, `src/plain.js`, `src/labels.js`, `src/scale.js` | number formatting, plain-words text (rule sentences, notes, labels) and axis scaling (no statistics), with tests |
 
 ## Test and build
 

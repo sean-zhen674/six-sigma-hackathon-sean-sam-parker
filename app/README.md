@@ -1,12 +1,12 @@
 # AeroPrint API
 
 A REST API (FastAPI) that checks whether a titanium-bracket 3D-printing process is in control
-and capable. Input: a CSV with one row per coupon (5 coupons per build). Output: X-bar/R and
+and capable. Input: a CSV with one row per coupon (5 coupons per build; 5 required columns, 8 optional print-parameter columns, anything else ignored, see [`../docs/csv-format.md`](../docs/csv-format.md)). Output: X-bar/R and
 I-MR charts, Nelson rule flags, capability indices, and RELEASE / RETEST / QUARANTINE per build.
 
 All statistics are in `app/qc.py`; `app/main.py` only reads a CSV, calls `qc.analyze()` and returns
 the result. For the full explanation (formulas, assumptions, every function, inputs and the
-fresh-clone setup) read the **[root README](../README.md)**. Column list: [`../data/README.md`](../data/README.md).
+fresh-clone setup) read the **[root README](../README.md)**. Upload format and templates: [`../docs/csv-format.md`](../docs/csv-format.md); the sample files' codebook: [`../data/README.md`](../data/README.md).
 
 ## Run it
 
@@ -25,15 +25,20 @@ bash app/testme.sh        # API on http://localhost:8000, docs at /docs
 | `GET /health` | `{"status": "ok"}` |
 | `GET /datasets` | the 3 bundled test datasets |
 | `GET /spec-limits` | default spec limits (UTS LSL 900, porosity USL 0.5, dimensional +-0.10) |
-| `GET /analyze/{dataset}` | full analysis of a bundled dataset; optional `baseline_n`; 404 if unknown |
-| `POST /analyze` | full analysis of an uploaded CSV (`file`); optional `baseline_n` (>= 5, default 20), `uts_lsl`, `porosity_usl`, `dim_lsl`, `dim_usl` |
+| `GET /analyze/{dataset}` | full analysis of a bundled dataset; the same optional `baseline_n`, `uts_lsl`, `porosity_usl`, `dim_lsl`, `dim_usl` as `POST /analyze`; 404 if unknown |
+| `POST /analyze` | full analysis of an uploaded CSV (`file`; required columns `build_id`, `build_timestamp`, `uts_MPa`, `porosity_pct`, `dimensional_dev_mm`; the 8 print parameters are optional; other columns are ignored; bad data gives a 422 that names the problem); optional `baseline_n` (>= 5, default 20), `uts_lsl`, `porosity_usl`, `dim_lsl`, `dim_usl` |
 
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/analyze/oxygen_drift
 curl -F file=@data/laser_power_excursion.csv http://localhost:8000/analyze
 curl -F file=@data/oxygen_drift.csv "http://localhost:8000/analyze?baseline_n=20&uts_lsl=920&porosity_usl=0.4"
+curl "http://localhost:8000/analyze/oxygen_drift?uts_lsl=990"   # same answer as POSTing the file with uts_lsl=990 (UTS Cpl -1.04)
 ```
+
+GET and POST share one helper (`_build_specs` in `main.py`) that turns the spec parameters into
+the limits passed to `qc.analyze`, so they cannot differ. A limit that is not a finite number, or
+`dim_lsl` not below `dim_usl`, returns HTTP 422 with a message.
 
 Bad input (missing column, a build without 5 coupons, an unreadable file) returns HTTP 422 with
 `{"detail": "<what is wrong>"}`.

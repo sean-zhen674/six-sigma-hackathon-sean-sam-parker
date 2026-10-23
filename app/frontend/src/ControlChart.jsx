@@ -1,11 +1,17 @@
-import { chartDomain, makeScale, specVisible, extent, xPosition } from './scale.js'
-import { fmt, shortBuild } from './format.js'
+import { chartDomain, makeScale, specVisible, extent, spreadLabels, xPosition } from './scale.js'
+import { CHART_HELP, fmt, ruleTip, shortBuild, specTag } from './format.js'
+
+/** The one-line plain description under a chart title. kind = 'xbar' | 'r' | 'i' | 'mr'. */
+export function ChartHelp({ kind }) {
+  return CHART_HELP[kind] ? <p className="chart-help">{CHART_HELP[kind]}</p> : null
+}
 
 // One control chart drawn as inline SVG. Every number (centre line, limits, points, which rules
 // fired) is passed in from the API; this component only turns them into pixels.
 //
 // props:
-//   title, unit      text for the heading and the y axis
+//   title, unit      text for the heading (it already names the unit) and for the hover text; unit is in words
+//   kind             'xbar' | 'r' | 'i' | 'mr': picks the one-line help text under the title
 //   buildIds         x labels, one per point
 //   values           the plotted points (null = no point, used by the MR chart)
 //   cl, ucl, lcl     lines from the API
@@ -15,14 +21,14 @@ import { fmt, shortBuild } from './format.js'
 //   digits           decimals for labels
 
 const W = 560
-const H = 250
-const M = { left: 56, right: 86, top: 24, bottom: 34 }
+const H = 258
+const M = { left: 56, right: 104, top: 24, bottom: 42 }
 
 const NOT_FLAGGED_COLOR = '#1d4ed8'
 const FLAGGED_COLOR = '#b42318'
 
 export default function ControlChart({
-  title, unit, buildIds, values, cl, ucl, lcl, rules, specs = [], baselineN, digits = 2,
+  title, kind, unit, buildIds, values, cl, ucl, lcl, rules, specs = [], baselineN, digits = 2,
 }) {
   const n = values.length
   const left = M.left
@@ -48,21 +54,30 @@ export default function ControlChart({
     .filter(Boolean)
     .join(' ')
 
+  // Three control lines (tag drawn in the chart, full name in the legend under the chart).
   const lines = [
-    { label: 'UCL', value: ucl, color: FLAGGED_COLOR, dash: null },
-    { label: 'CL', value: cl, color: '#067647', dash: null },
-    { label: 'LCL', value: lcl, color: FLAGGED_COLOR, dash: null },
+    { tag: 'Upper', full: 'Upper control limit', value: ucl, color: FLAGGED_COLOR },
+    { tag: 'Center', full: 'Center line', value: cl, color: '#067647' },
+    { tag: 'Lower', full: 'Lower control limit', value: lcl, color: FLAGGED_COLOR },
   ]
+  // Every label on the right edge: control lines are one text line, allowed-value lines are two.
+  const labels = [
+    ...lines.map((l) => ({ text: [`${l.tag} ${fmt(l.value, digits)}`], color: l.color, value: l.value, h: 17 })),
+    ...shownSpecs.map((s) => ({ text: [specTag(s.label), fmt(s.value, digits)], color: '#6d28d9', value: s.value, h: 32 })),
+  ]
+  const labelY = spreadLabels(labels.map((l) => ({ y: y(l.value), h: l.h })), 2, bottom)
 
   const ticks = buildIds.map((id, i) => ({ id, i })).filter(({ i }) => i % 5 === 0 || i === n - 1)
 
-  const baselineRight = baselineN ? x(Math.min(baselineN, n) - 1) + step / 2 : null
+  const baselineLeft = Math.max(left - step / 2, left - 8) // few builds: keep the shading inside the chart
+  const baselineRight = baselineN ? Math.min(x(Math.min(baselineN, n) - 1) + step / 2, right + 8) : null
 
   return (
     <figure className="chart">
       <figcaption>
-        <strong>{title}</strong> {unit ? <span className="muted">({unit})</span> : null}
+        <strong>{title}</strong>
       </figcaption>
+      <ChartHelp kind={kind} />
       <div className="chart-scroll">
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -73,9 +88,9 @@ export default function ControlChart({
         >
           {baselineRight !== null && (
             <g>
-              <rect x={left - step / 2} y={top} width={baselineRight - left + step / 2} height={bottom - top} fill="#e0ecff" />
-              <text x={left - step / 2 + 4} y={top + 12} fontSize="12" fill="#334155">
-                {`baseline (builds 1-${Math.min(baselineN, n)})`}
+              <rect x={baselineLeft} y={top} width={baselineRight - baselineLeft} height={bottom - top} fill="#e0ecff" />
+              <text x={baselineLeft + 4} y={top + 12} fontSize="12" fill="#334155">
+                {`baseline builds 1 to ${Math.min(baselineN, n)}`}
               </text>
             </g>
           )}
@@ -90,17 +105,17 @@ export default function ControlChart({
           <text x={(left + right) / 2} y={H - 4} fontSize="12" textAnchor="middle" fill="#334155">build</text>
 
           {lines.map((l) => (
-            <g key={l.label}>
-              <line x1={left} y1={y(l.value)} x2={right} y2={y(l.value)} stroke={l.color} strokeWidth="1.5" />
-              <text x={right + 4} y={y(l.value) + 4} fontSize="12" fill={l.color}>{`${l.label} ${fmt(l.value, digits)}`}</text>
-            </g>
+            <line key={l.full} x1={left} y1={y(l.value)} x2={right} y2={y(l.value)} stroke={l.color} strokeWidth="1.5" />
           ))}
-
           {shownSpecs.map((s) => (
-            <g key={s.label}>
-              <line x1={left} y1={y(s.value)} x2={right} y2={y(s.value)} stroke="#6d28d9" strokeWidth="1.5" strokeDasharray="6 4" />
-              <text x={right + 4} y={y(s.value) + 4} fontSize="12" fill="#6d28d9">{`${s.label} ${fmt(s.value, digits)}`}</text>
-            </g>
+            <line key={s.label} x1={left} y1={y(s.value)} x2={right} y2={y(s.value)} stroke="#6d28d9" strokeWidth="1.5" strokeDasharray="6 4" />
+          ))}
+          {labels.map((l, k) => (
+            <text key={k} x={right + 6} fontSize="12" fill={l.color}>
+              {l.text.map((line, j) => (
+                <tspan key={j} x={right + 6} y={labelY[k] - (l.text.length - 1) * 7 + j * 14 + 4}>{line}</tspan>
+              ))}
+            </text>
           ))}
 
           <polyline points={path} fill="none" stroke={NOT_FLAGGED_COLOR} strokeWidth="1.5" />
@@ -108,7 +123,7 @@ export default function ControlChart({
           {values.map((v, i) => {
             if (v === null || v === undefined) return null
             const broke = rules[i] && rules[i].length > 0
-            const tip = `${buildIds[i]}: ${fmt(v, digits)}${unit ? ' ' + unit : ''}\n${broke ? 'Rules broken: ' + rules[i].join(', ') : 'No rule broken'}`
+            const tip = `${buildIds[i]}: ${fmt(v, digits)}${unit ? ' ' + unit : ''}\n${broke ? 'Rules broken:\n' + rules[i].map((r) => '- ' + ruleTip(r, kind)).join('\n') : 'No rule broken'}`
             const cx = x(i)
             const cy = y(v)
             return broke ? (
@@ -129,13 +144,21 @@ export default function ControlChart({
           })}
         </svg>
       </div>
+      <ul className="chart-legend" aria-label="What the lines show">
+        {lines.map((l) => (
+          <li key={l.full}><span className="swatch" style={{ borderColor: l.color }} aria-hidden="true" />{l.full}: {fmt(l.value, digits)}</li>
+        ))}
+        {shownSpecs.map((s) => (
+          <li key={s.label}><span className="swatch dashed" style={{ borderColor: '#6d28d9' }} aria-hidden="true" />{s.label}: {fmt(s.value, digits)}</li>
+        ))}
+      </ul>
       <p className="chart-note">
         {flaggedIds.length
           ? `Red diamonds break a rule: ${flaggedIds.join(', ')}.`
           : 'No build breaks a rule on this chart.'}
         {hiddenSpecs.length > 0 &&
-          ` Spec limit${hiddenSpecs.length > 1 ? 's' : ''} not drawn (far outside the data): ${hiddenSpecs
-            .map((s) => `${s.label} ${fmt(s.value, digits)}`)
+          ` Not drawn because far outside the data: ${hiddenSpecs
+            .map((s) => `${s.label.toLowerCase()} ${fmt(s.value, digits)}`)
             .join(', ')}.`}
       </p>
     </figure>

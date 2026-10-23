@@ -47,3 +47,35 @@ process capable of the aerospace spec, since when not, and what should be done w
    and the capable baseline must flag nothing; if it does, we explain that build in demo/README.md.
 3. Porosity is bounded at 0 and skewed, so its Cpu is approximate: Shapiro-Wilk is reported with a warning.
 4. Deploy key: without CONNECT_SERVER/CONNECT_API_KEY, H-06 is blocked. Get them early.
+
+## H-09 decisions (dashboard usability pass, asked 2026-10-22)
+- Layout: keep the current order (banner, charts, parameters, table, legend).
+- Banner: unreliable indices are greyed out with a warning and "do not rely on this".
+- Explain: one plain-English summary sentence under the banner (wording only, from API fields), a one-line help text under each chart, a dismissible first-visit tour, dataset descriptions in the picker.
+- Spec limits: editable on every dataset (GET /analyze/{dataset} accepts the same spec params as POST /analyze).
+
+## H-10 decisions (upload format, asked 2026-10-22)
+- Required CSV columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm (5 coupons per build).
+- The 8 print parameters are optional; present ones are charted and ranked, missing ones skipped with a note.
+- The sample CSVs keep their extra columns; the tool ignores anything it does not use.
+- Guide: docs/csv-format.md + template CSV, an in-page help panel with a template download, friendlier upload errors.
+
+## H-11 decisions (plain words, asked 2026-10-22)
+- Spell out abbreviations on the dashboard; the standard symbol appears once in parentheses on first mention (for example "Capability index for the lower limit (Cpl)").
+- Scope: the dashboard page only. README, SPEC and the guide keep their wording.
+
+## H-12 decisions (controls panel redesign, asked 2026-10-22)
+- Header: remove the subtitle sentence; add a GitHub repository link; keep "Take the tour".
+- Box 1 "dataset": label "Select an example dataset" (dropdown shows Title Case names without underscores), its description, then "Upload dataset" on its own line underneath.
+- Box 2 "settings", below box 1: baseline builds (with a small grey explanation), then Tensile Strength: Lowest Allowed (MPa); Porosity: Highest Allowed (%); Dimensional Deviation: Lowest Allowed (mm) and Highest Allowed (mm) on the same line; buttons on one line.
+- Units abbreviated in these labels at the team's request.
+
+## Reminder (asked 2026-10-22)
+- When all dashboard work is done: UPDATE THE README (root README.md, then check app/README.md, demo/README.md, docs/csv-format.md, SPEC.md sections 3 and 6) before merging to main and before the final submission steps (H-08).
+
+## H-13 decisions (layout round 2, asked 2026-10-22)
+- Dataset box and Parameters box side by side on wide screens, stacked on narrow ones.
+- Settings box title becomes "Parameters".
+- Baseline builds moves out of the Parameters box into the Control charts section (with its grey explanation); changing it re-runs the analysis.
+- The CSV format instructions move under the Upload dataset button and open as a popup window.
+- The dataset description loses its early line break (width cap removed).

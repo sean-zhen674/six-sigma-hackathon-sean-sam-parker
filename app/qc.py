@@ -8,8 +8,17 @@ Method (SPEC.md section 4): one subgroup is the 5 coupons of one build.
 Limits come from a baseline (the first `baseline_n` builds in time order).
 Assumptions: coupons within a build are a rational subgroup, values are roughly normal,
 the baseline is in control, builds are independent and in time order.
+
+Input (SPEC.md section 3, docs/csv-format.md): one row per coupon, exactly 5 coupons per build.
+  REQUIRED columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm.
+  OPTIONAL columns: the 8 print parameters in PARAMETER_COLUMNS. Each one present gets an I-MR chart
+  and joins "investigate first"; the ones absent are skipped (named in settings.parameters_missing).
+  A parameter that varies within a build is averaged over that build's rows; a constant one is used as is.
+  Every other column (coupon_id, machine_id, material_lot, yield_MPa, elongation_pct, pass_fail, ...)
+  is IGNORED: it is never read, so blanks or text in it cannot cause an error.
 """
 import math
+import warnings as _warnings
 
 import numpy as np
 import pandas as pd
@@ -34,10 +43,9 @@ PARAMETER_COLUMNS = [
     "laser_power_W", "scan_speed_mm_s", "layer_thickness_um", "chamber_oxygen_ppm",
     "humidity_pct", "powder_bed_temp_C", "build_plate_temp_C", "stress_relief_temp_C",
 ]
-REQUIRED_COLUMNS = [
-    "build_id", "coupon_id", "build_timestamp", "machine_id", "material_lot",
-    "uts_MPa", "yield_MPa", "elongation_pct", "porosity_pct", "dimensional_dev_mm", "pass_fail",
-] + PARAMETER_COLUMNS
+# The columns the tool must have. The parameters are optional; any other column is ignored.
+REQUIRED_COLUMNS = ["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]
+NUMERIC_REQUIRED = ["uts_MPa", "porosity_pct", "dimensional_dev_mm"]
 DEFAULT_SPECS = {
     "uts_MPa": {"lsl": 900.0, "usl": None, "target": 950.0},
     "porosity_pct": {"lsl": None, "usl": 0.5, "target": 0.2},
@@ -107,6 +115,14 @@ def _any_flag(flags):
     return any(len(v) > 0 for v in flags.values())
 
 
+def _coupon_count_message(bad_sizes):
+    """Message for builds that do not have exactly 5 coupons. bad_sizes: Series build_id -> count."""
+    items = list(bad_sizes.items())
+    shown = ", ".join(f"build {k} has {v} coupon{'s' if v != 1 else ''}" for k, v in items[:5])
+    more = f" (and {len(items) - 5} more)" if len(items) > 5 else ""
+    return f"{shown}{more}; each build needs exactly {SUBGROUP_SIZE} coupons"
+
+
 # ---------------------------------------------------------------------------
 # X-bar and R chart
 # ---------------------------------------------------------------------------
@@ -129,8 +145,7 @@ def xbar_r(df, subgroup_col, value_col, baseline_n=20):
     sizes = groups.size()
     bad = sizes[sizes != SUBGROUP_SIZE]
     if len(bad) > 0:
-        listing = ", ".join(f"{k} has {v}" for k, v in bad.items())
-        raise ValueError(f"each build must have exactly {SUBGROUP_SIZE} coupons; {listing}")
+        raise ValueError(_coupon_count_message(bad))
     if len(sizes) < 2:
         raise ValueError("need at least 2 builds to draw a control chart")
 
@@ -346,6 +361,56 @@ def _clean(obj):
     return obj
 
 
+def _to_numbers(series, name):
+    """Turn a column into numbers, or raise ValueError naming the column.
+
+    Rejects True/False, dates, text, blank cells and infinite values (inf, -inf, 1e400).
+    Rows are counted as in the file: row 1 is the header, so the first data row is row 2.
+    """
+    if pd.api.types.is_bool_dtype(series) or any(isinstance(v, (bool, np.bool_)) for v in series):
+        raise ValueError(f"column '{name}' contains True/False values; it must contain numbers")
+    if pd.api.types.is_datetime64_any_dtype(series) or pd.api.types.is_timedelta64_dtype(series):
+        raise ValueError(f"column '{name}' contains dates or times; it must contain numbers")
+    if pd.api.types.is_complex_dtype(series):
+        raise ValueError(f"column '{name}' has non-numeric values; use plain numbers without units")
+    try:
+        numeric = pd.to_numeric(series, errors="coerce")
+    except (TypeError, ValueError):  # for example complex numbers or lists
+        raise ValueError(f"column '{name}' has non-numeric values; use plain numbers without units")
+    text_only = numeric.isna() & series.notna()
+    if text_only.any():
+        pos = int(np.argmax(text_only.to_numpy()))
+        raise ValueError(
+            f"column '{name}' has non-numeric text, for example '{series.iloc[pos]}' in row {pos + 2} of the file; "
+            f"use plain numbers without units"
+        )
+    if numeric.isna().any():
+        pos = int(np.argmax(numeric.isna().to_numpy()))
+        raise ValueError(
+            f"column '{name}' has {int(numeric.isna().sum())} blank or missing values (first in row {pos + 2} "
+            f"of the file); fill them in or delete those rows"
+        )
+    infinite = ~np.isfinite(numeric.to_numpy(dtype=float))
+    if infinite.any():
+        pos = int(np.argmax(infinite))
+        raise ValueError(f"column '{name}' has an infinite value (row {pos + 2} of the file); use ordinary numbers")
+    return numeric
+
+
+def _build_parameters(data, parameters_used, build_ids):
+    """One row per build (time order), one column per parameter present in the file.
+
+    A parameter that is constant within a build keeps that value exactly; if it varies
+    (for example a raw layer log) the build's value is the MEAN of its rows.
+    """
+    if not parameters_used:
+        return pd.DataFrame(index=range(len(build_ids)))
+    grouped = data.groupby("build_id", sort=False)[parameters_used]
+    constant = grouped.min() == grouped.max()
+    per_build = grouped.mean().where(~constant, grouped.first())
+    return per_build.loc[build_ids].reset_index(drop=True)
+
+
 def _merge_specs(specs):
     merged = {k: dict(v) for k, v in DEFAULT_SPECS.items()}
     for col, given in (specs or {}).items():
@@ -358,26 +423,62 @@ def _merge_specs(specs):
 def analyze(df, specs=None, baseline_n=20):
     """Run every statistic on a coupon-level DataFrame and return a JSON-safe dict.
 
-    df: one row per coupon with the REQUIRED_COLUMNS (SPEC section 3).
+    df: one row per coupon with the REQUIRED_COLUMNS (SPEC section 3); PARAMETER_COLUMNS are optional;
+        any other column is ignored. Bad data in a used column raises ValueError with a plain message.
     specs: optional {"uts_MPa": {"lsl": ..}, ...} overriding the defaults.
     """
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"missing required columns: {', '.join(missing)}")
-    nan_cols = [c for c in REQUIRED_COLUMNS if df[c].isna().any()]
-    if nan_cols:
-        raise ValueError(f"missing values (NaN) in columns: {', '.join(nan_cols)}")
+    if len(df) == 0:
+        raise ValueError("the file has a header but no data rows")
+    for col in REQUIRED_COLUMNS + PARAMETER_COLUMNS:
+        times = int((df.columns == col).sum())
+        if times > 1:
+            raise ValueError(f"column '{col}' appears {times} times in the header; keep only one")
+    parameters_used = [c for c in PARAMETER_COLUMNS if c in df.columns]
+    parameters_missing = [c for c in PARAMETER_COLUMNS if c not in df.columns]
+
+    # Work on a copy that holds ONLY the columns the tool uses. Every other column is ignored,
+    # so NaN or text in coupon_id, yield_MPa, pass_fail, ... can never raise an error.
+    data = df[REQUIRED_COLUMNS + parameters_used].copy()
+    for col in ["build_id", "build_timestamp"]:
+        if data[col].isna().any():
+            raise ValueError(f"column '{col}' has {int(data[col].isna().sum())} blank or missing values; fill them in")
+    for col in NUMERIC_REQUIRED + parameters_used:
+        data[col] = _to_numbers(data[col], col)
     specs = _merge_specs(specs)
     warnings = []
+    if not parameters_used:
+        warnings.append('No print-parameter columns found: the "investigate first" ranking is skipped.')
+    elif parameters_missing:
+        warnings.append("Print-parameter columns not found (skipped): " + ", ".join(parameters_missing) + ".")
 
     # Time order: builds sorted by their earliest timestamp (stable for ties).
-    data = df.copy()
-    try:
-        data["_ts"] = pd.to_datetime(data["build_timestamp"])
-    except (ValueError, TypeError) as err:
-        raise ValueError(f"build_timestamp is not a valid date/time: {err}")
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore")  # pandas warns "Could not infer format"; we report our own message
+        try:
+            data["_ts"] = pd.to_datetime(data["build_timestamp"])
+        except (ValueError, TypeError, OverflowError):
+            bad_ts = pd.to_datetime(data["build_timestamp"], errors="coerce").isna()
+            example = data["build_timestamp"][bad_ts].iloc[0] if bad_ts.any() else "?"
+            raise ValueError(f"build_timestamp is not a valid date/time (for example '{example}'); "
+                             f"use a form like 2026-01-05T08:00:00")
     data["build_id"] = data["build_id"].astype(str)
+    sizes = data.groupby("build_id", sort=False).size()
+    wrong = sizes[sizes != SUBGROUP_SIZE]
+    if len(wrong) > 0:
+        raise ValueError(_coupon_count_message(wrong))
     build_time = data.groupby("build_id", sort=False)["_ts"].min().sort_values(kind="stable")
+    tied = build_time[build_time.duplicated(keep=False)]
+    if len(tied) > 0:
+        first_time = tied.iloc[0]
+        pair = [b for b in tied.index if tied[b] == first_time][:2]
+        warnings.append(
+            f"{len(tied)} builds share the same build_timestamp (for example {pair[0]} and {pair[1]}); "
+            "builds with the same timestamp are ordered by their position in the file, which changes which "
+            "builds form the baseline. Give every build its own timestamp."
+        )
     order = {b: i for i, b in enumerate(build_time.index)}
     data["_order"] = data["build_id"].map(order)
     data = data.sort_values("_order", kind="stable").reset_index(drop=True)
@@ -439,7 +540,7 @@ def analyze(df, specs=None, baseline_n=20):
         }
 
     # Build parameters: one value per build, I-MR charts, ranking.
-    params_df = data.groupby("build_id", sort=False)[PARAMETER_COLUMNS].first().loc[build_ids].reset_index(drop=True)
+    params_df = _build_parameters(data, parameters_used, build_ids)
     ranked = rank_parameters(params_df, baseline_n)
     charts["imr"] = ranked["charts"]
     for name, why in ranked["skipped"].items():
@@ -484,6 +585,7 @@ def analyze(df, specs=None, baseline_n=20):
         "settings": {
             "baseline_n": baseline_n, "baseline_n_used": n_base, "subgroup_size": SUBGROUP_SIZE,
             "specs": specs, "capable_min_index": CAPABLE_MIN,
+            "parameters_used": parameters_used, "parameters_missing": parameters_missing,
             "constants": {"A2": A2, "D3": D3, "D4": D4, "d2": D2, "imr_d2": IMR_D2, "mr_D4": MR_D4},
         },
     }

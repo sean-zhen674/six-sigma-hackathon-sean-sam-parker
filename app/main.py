@@ -2,8 +2,14 @@
 
 Thin routes only: every number comes from qc.analyze(). This file reads a CSV, calls analyze(),
 and returns the result. There are no statistics here.
+
+Upload format (docs/csv-format.md): a CSV with one row per coupon, 5 coupons per build.
+Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm.
+The 8 print-parameter columns are optional; every other column is ignored.
+A file the tool cannot use gets a 422 whose text says what to fix.
 """
 import io
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -35,9 +41,9 @@ def _find_data_dir() -> Path:
 DATA_DIR = _find_data_dir()
 
 DATASET_DESCRIPTIONS = {
-    "capable_baseline": "30 builds, process in control; the capable case (every index at least 1.33).",
-    "oxygen_drift": "Chamber oxygen creeps up from build 21, so UTS falls and porosity rises.",
-    "laser_power_excursion": "Laser power drops about 15 % on builds 24-26, so porosity spikes.",
+    "capable_baseline": "Capable baseline: a healthy process in control, every index at least 1.33, so every build should be released.",
+    "oxygen_drift": "Oxygen drift: chamber oxygen creeps up from build 21; look for UTS falling and porosity rising.",
+    "laser_power_excursion": "Laser power excursion: laser power dips about 15 % on builds 24-26; look for a porosity spike, then recovery.",
 }
 
 app = FastAPI(
@@ -63,6 +69,27 @@ app.add_middleware(
 def _datasets() -> dict:
     """Bundled datasets that exist on disk: {name: path}."""
     return {name: DATA_DIR / f"{name}.csv" for name in DATASET_DESCRIPTIONS if (DATA_DIR / f"{name}.csv").is_file()}
+
+
+def _build_specs(uts_lsl, porosity_usl, dim_lsl, dim_usl):
+    """The ONE place spec-limit query parameters become the `specs` dict for qc.analyze.
+
+    Used by GET /analyze/{dataset} and POST /analyze, so the two can never differ.
+    Limits that were not given keep their defaults (None is returned if none were given).
+    A limit that is not a finite number (nan, inf) is a 422; lsl >= usl is rejected by qc.analyze.
+    """
+    given = {"uts_lsl": uts_lsl, "porosity_usl": porosity_usl, "dim_lsl": dim_lsl, "dim_usl": dim_usl}
+    for name, value in given.items():
+        if value is not None and not math.isfinite(value):
+            raise HTTPException(status_code=422, detail=f"{name} must be a finite number, got {value}")
+    overrides = {
+        "uts_MPa": {"lsl": uts_lsl},
+        "porosity_pct": {"usl": porosity_usl},
+        "dimensional_dev_mm": {"lsl": dim_lsl, "usl": dim_usl},
+    }
+    specs = {col: {k: v for k, v in lim.items() if v is not None} for col, lim in overrides.items()}
+    specs = {col: lim for col, lim in specs.items() if lim}
+    return specs or None
 
 
 def _run(df: pd.DataFrame, specs=None, baseline_n: int = 20) -> dict:
@@ -98,34 +125,39 @@ async def spec_limits():
 
 
 @app.get("/analyze/{dataset}")
-async def analyze_dataset(dataset: str, baseline_n: int = Query(20, ge=5)):
-    """Analyze one bundled dataset (see GET /datasets)."""
-    path = _datasets().get(dataset)  # lookup by name, never build a path from user text
-    if path is None:
-        raise HTTPException(status_code=404, detail=f"unknown dataset '{dataset}'; see GET /datasets")
-    return _run(pd.read_csv(path), baseline_n=baseline_n)
-
-
-@app.post("/analyze")
-async def analyze_upload(
-    file: UploadFile = File(..., description="CSV, one row per coupon, 5 coupons per build"),
+async def analyze_dataset(
+    dataset: str,
     baseline_n: int = Query(20, ge=5, description="number of first builds used for the control limits"),
     uts_lsl: Optional[float] = Query(None, description="UTS lower spec limit, MPa (default 900)"),
     porosity_usl: Optional[float] = Query(None, description="porosity upper spec limit, % (default 0.5)"),
     dim_lsl: Optional[float] = Query(None, description="dimensional deviation lower limit, mm (default -0.10)"),
     dim_usl: Optional[float] = Query(None, description="dimensional deviation upper limit, mm (default 0.10)"),
 ):
-    """Analyze an uploaded CSV. Spec limits you do not give keep their defaults."""
+    """Analyze one bundled dataset (see GET /datasets). Takes the same spec parameters as POST /analyze."""
+    path = _datasets().get(dataset)  # lookup by name, never build a path from user text
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"unknown dataset '{dataset}'; see GET /datasets")
+    specs = _build_specs(uts_lsl, porosity_usl, dim_lsl, dim_usl)
+    return _run(pd.read_csv(path), specs=specs, baseline_n=baseline_n)
+
+
+@app.post("/analyze")
+async def analyze_upload(
+    file: UploadFile = File(..., description="CSV, one row per coupon, 5 coupons per build. Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm. The 8 print-parameter columns are optional; other columns are ignored. See docs/csv-format.md"),
+    baseline_n: int = Query(20, ge=5, description="number of first builds used for the control limits"),
+    uts_lsl: Optional[float] = Query(None, description="UTS lower spec limit, MPa (default 900)"),
+    porosity_usl: Optional[float] = Query(None, description="porosity upper spec limit, % (default 0.5)"),
+    dim_lsl: Optional[float] = Query(None, description="dimensional deviation lower limit, mm (default -0.10)"),
+    dim_usl: Optional[float] = Query(None, description="dimensional deviation upper limit, mm (default 0.10)"),
+):
+    """Analyze an uploaded CSV (5 required columns, optional print parameters, extras ignored).
+
+    Spec limits you do not give keep their defaults. Bad data gives a 422 that names the problem.
+    """
     raw = await file.read()
     try:
         df = pd.read_csv(io.BytesIO(raw))
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as err:  # EmptyDataError is a ValueError
         raise HTTPException(status_code=422, detail=f"could not read the upload as a CSV file: {err}")
-    overrides = {
-        "uts_MPa": {"lsl": uts_lsl},
-        "porosity_pct": {"usl": porosity_usl},
-        "dimensional_dev_mm": {"lsl": dim_lsl, "usl": dim_usl},
-    }
-    specs = {col: {k: v for k, v in lim.items() if v is not None} for col, lim in overrides.items()}
-    specs = {col: lim for col, lim in specs.items() if lim}
-    return _run(df, specs=specs or None, baseline_n=baseline_n)
+    specs = _build_specs(uts_lsl, porosity_usl, dim_lsl, dim_usl)
+    return _run(df, specs=specs, baseline_n=baseline_n)
