@@ -18,7 +18,7 @@ else
   PY="python"
 fi
 
-if ! "$PY" -m rsconnect --help >/dev/null 2>&1; then
+if ! "$PY" -m rsconnect.main --help >/dev/null 2>&1; then
   echo "ERROR: rsconnect-python is not installed. Run: $PY -m pip install rsconnect-python" >&2
   exit 1
 fi
@@ -37,7 +37,7 @@ cp "$ROOT"/data/*.csv "$SCRIPT_DIR/data/"
 
 cd "$SCRIPT_DIR"
 # If the two variables are set, use explicit auth; otherwise rsconnect uses your saved account.
-"$PY" -m rsconnect deploy fastapi \
+"$PY" -m rsconnect.main deploy fastapi \
   ${CONNECT_SERVER:+--server "$CONNECT_SERVER"} \
   ${CONNECT_API_KEY:+--api-key "$CONNECT_API_KEY"} \
   --entrypoint main:app \

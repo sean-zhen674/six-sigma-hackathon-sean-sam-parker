@@ -6,6 +6,7 @@
 *.yaml text eol=lf
 *.R text eol=lf
 *.py text eol=lf
+*.csv text eol=lf
 manifest.json text eol=lf
 *.png binary
 *.gz binary

@@ -52,8 +52,8 @@ make that work:
 - **Import fallback.** `main.py` tries `from app.qc import ...` (repo root, tests) and, only if
   that module is not found, falls back to `from qc import ...` (bundle root). Any other error
   inside `qc.py` still shows up.
-- **Copied data folder.** `bash app/manifestme.sh` copies `data/*.csv` into `app/data/` (gitignored,
-  made on demand) and writes `manifest.json`, because the bundle cannot see `../data`. `main.py`
+- **Copied data folder.** `bash app/manifestme.sh` copies `data/*.csv` into `app/data/` (committed, so the
+  deploy ships it; `tests/test_bundle.py` fails if it drifts from `data/`) and writes `manifest.json`, because the bundle cannot see `../data`. `main.py`
   looks in `app/data/` first, then `../data/`. The script needs `rsconnect-python`
   (`python -m pip install rsconnect-python`).
 

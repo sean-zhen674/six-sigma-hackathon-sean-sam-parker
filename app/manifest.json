@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "locale": "English_United States.1252",
+  "metadata": {
+    "appmode": "python-fastapi",
+    "entrypoint": "main:app"
+  },
+  "python": {
+    "version": "3.12.10",
+    "package_manager": {
+      "name": "pip",
+      "version": "25.0.1",
+      "package_file": "requirements.txt"
+    }
+  },
+  "environment": {
+    "python": {
+      "requires": "~=3.12.0"
+    }
+  },
+  "files": {
+    "requirements.txt": {
+      "checksum": "5ab4c52c8cd03c2c63f8a1a75a7774c9"
+    },
+    ".python-version": {
+      "checksum": "61939823fbcc7e8de3b61ab105331baf"
+    },
+    "data/capable_baseline.csv": {
+      "checksum": "f87036e395247a66604a761b4cd8bebb"
+    },
+    "data/laser_power_excursion.csv": {
+      "checksum": "3b7e22368019ea3caf62bb9018337927"
+    },
+    "data/oxygen_drift.csv": {
+      "checksum": "afda5c1df90dc825c6f4461e9cb2b6f3"
+    },
+    "main.py": {
+      "checksum": "a6f6b56d4cd2455ccd88add785b5a255"
+    },
+    "qc.py": {
+      "checksum": "eae084c3c2b0a2b78c09e3325a35489d"
+    }
+  }
+}

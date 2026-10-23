@@ -12,3 +12,6 @@ rsconnect/
 .opencode/model-ladder-state.json
 
 .claude/settings.local.json
+
+# extra virtual environments (e.g. .venv312 for the Connect manifest, written with Python 3.12)
+.venv*/

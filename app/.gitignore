@@ -1,2 +1,3 @@
-# Copied here by manifestme.sh so the Posit Connect bundle contains the datasets.
-data/
+# The Posit Connect bundle is the app/ folder only, so app/data/ (a copy of ../data/*.csv, made by
+# manifestme.sh) IS committed. tests/test_bundle.py fails if the copy drifts from data/.
+__pycache__/
