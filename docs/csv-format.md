@@ -176,7 +176,7 @@ The numbers are still calculated, but which builds count as the baseline depends
 
 1. **Process capable: YES** means every chart is in control and every index (Cpl, Cpu, Cpk) is at least 1.33.
 2. **A red point** means that build behaved differently from the baseline builds; the table gives
-   RELEASE, RETEST or QUARANTINE and, if you included print parameters, which one to investigate first.
+   RELEASE or QUARANTINE and, if you included print parameters, which one to investigate first.
 3. An index only counts while its chart is in control; otherwise it is marked "not reliable".
 
 The full method, the formulas and the sample-data walkthrough are in the project [`README.md`](../README.md).

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { chartDomain, makeScale, specVisible, extent, spreadLabels, xPosition } from './scale.js'
-import { CHART_HELP, fmt, ruleTip, shortBuild, specTag } from './format.js'
+import { CHART_HELP, fmt, rulesBroken, shortBuild, specTag } from './format.js'
+import { rulePhrase } from './plain.js'
 
 /** The one-line plain description under a chart title. kind = 'xbar' | 'r' | 'i' | 'mr'. */
 export function ChartHelp({ kind }) {
@@ -30,6 +32,7 @@ const FLAGGED_COLOR = '#b42318'
 export default function ControlChart({
   title, kind, unit, buildIds, values, cl, ucl, lcl, rules, specs = [], baselineN, digits = 2,
 }) {
+  const [hover, setHover] = useState(null) // index of the point being pointed at (hover, or tap on a phone)
   const n = values.length
   const left = M.left
   const right = W - M.right
@@ -44,7 +47,6 @@ export default function ControlChart({
 
   const dataDomain = extent([...values, ...limits])
   const shownSpecs = specs.filter((s) => specVisible(s.value, dataDomain))
-  const hiddenSpecs = specs.filter((s) => s.value !== null && s.value !== undefined && !specVisible(s.value, dataDomain))
 
   const flaggedIds = buildIds.filter((_, i) => rules[i] && rules[i].length > 0)
 
@@ -54,7 +56,7 @@ export default function ControlChart({
     .filter(Boolean)
     .join(' ')
 
-  // Three control lines (tag drawn in the chart, full name in the legend under the chart).
+  // Three control lines (tag and value drawn at the right edge of the chart; full names are in the chart's screen reader text).
   const lines = [
     { tag: 'Upper', full: 'Upper control limit', value: ucl, color: FLAGGED_COLOR },
     { tag: 'Center', full: 'Center line', value: cl, color: '#067647' },
@@ -79,12 +81,13 @@ export default function ControlChart({
       </figcaption>
       <ChartHelp kind={kind} />
       <div className="chart-scroll">
+        <div className="chart-plot">
         <svg
           viewBox={`0 0 ${W} ${H}`}
           width={W}
           height={H}
           role="img"
-          aria-label={`${title}. ${baselineRight !== null ? `Shaded area: Baseline builds 1 to ${Math.min(baselineN, n)}. ` : ''}${flaggedIds.length ? `Out of control: ${flaggedIds.join(', ')}.` : 'No build breaks a rule.'}`}
+          aria-label={`${title}. ${baselineRight !== null ? `Shaded area: Baseline builds 1 to ${Math.min(baselineN, n)}. ` : ''}${lines.map((l) => `${l.full} ${fmt(l.value, digits)}.`).join(' ')} ${flaggedIds.length ? `Out of control: ${flaggedIds.join(', ')}.` : 'No build breaks a rule.'}`}
         >
           {baselineRight !== null && (
             <g>
@@ -94,8 +97,6 @@ export default function ControlChart({
 
           <line x1={left} y1={bottom} x2={right} y2={bottom} stroke="#64748b" />
           <line x1={left} y1={top} x2={left} y2={bottom} stroke="#64748b" />
-          <text x={left - 6} y={top + 4} fontSize="12" textAnchor="end" fill="#334155">{fmt(domain[1], digits)}</text>
-          <text x={left - 6} y={bottom} fontSize="12" textAnchor="end" fill="#334155">{fmt(domain[0], digits)}</text>
           {ticks.map(({ id, i }) => (
             <text key={id} x={x(i)} y={bottom + 16} fontSize="12" textAnchor="middle" fill="#334155">{shortBuild(id)}</text>
           ))}
@@ -120,44 +121,59 @@ export default function ControlChart({
           {values.map((v, i) => {
             if (v === null || v === undefined) return null
             const broke = rules[i] && rules[i].length > 0
-            const tip = `${buildIds[i]}: ${fmt(v, digits)}${unit ? ' ' + unit : ''}\n${broke ? 'Rules broken:\n' + rules[i].map((r) => '- ' + ruleTip(r, kind)).join('\n') : 'No rule broken'}`
             const cx = x(i)
             const cy = y(v)
-            return broke ? (
-              <polygon
-                key={i}
-                points={`${cx},${cy - 7} ${cx + 7},${cy} ${cx},${cy + 7} ${cx - 7},${cy}`}
-                fill={FLAGGED_COLOR}
-                stroke="#fff"
-                strokeWidth="1"
-              >
-                <title>{tip}</title>
-              </polygon>
-            ) : (
-              <circle key={i} cx={cx} cy={cy} r="3.5" fill={NOT_FLAGGED_COLOR}>
-                <title>{tip}</title>
-              </circle>
+            return (
+              <g key={i}>
+                {broke ? (
+                  <polygon
+                    points={`${cx},${cy - 7} ${cx + 7},${cy} ${cx},${cy + 7} ${cx - 7},${cy}`}
+                    fill={FLAGGED_COLOR}
+                    stroke="#fff"
+                    strokeWidth="1"
+                  />
+                ) : (
+                  <circle cx={cx} cy={cy} r="3.5" fill={NOT_FLAGGED_COLOR} />
+                )}
+                {hover === i && <circle cx={cx} cy={cy} r="9" fill="none" stroke="#0f172a" strokeWidth="1.5" />}
+                <circle
+                  cx={cx} cy={cy} r="10" fill="transparent"
+                  onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+                  onClick={() => setHover(hover === i ? null : i)}
+                />
+              </g>
             )
           })}
         </svg>
+        {hover !== null && values[hover] !== null && values[hover] !== undefined && (
+          <div
+            className={`chart-tip${x(hover) > (left + right) / 2 ? ' left' : ''}${x(hover) < left + (right - left) * 0.3 ? ' start' : ''}${y(values[hover]) < H * 0.4 ? ' below' : ''}`}
+            style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(values[hover]) / H) * 100}%` }}
+            role="status"
+          >
+            <strong>{buildIds[hover]}</strong>
+            <span>Value: {fmt(values[hover], digits)}{unit ? ' ' + unit : ''}</span>
+            {rules[hover] && rules[hover].length > 0
+              ? <span className="tip-rule">Rules broken: {rules[hover].join(', ')} (See "What the rules mean" below)</span>
+              : <span>No rule broken</span>}
+          </div>
+        )}
+        </div>
       </div>
-      <ul className="chart-legend" aria-label="What the lines show">
-        {lines.map((l) => (
-          <li key={l.full}><span className="swatch" style={{ borderColor: l.color }} aria-hidden="true" />{l.full}: {fmt(l.value, digits)}</li>
-        ))}
-        {shownSpecs.map((s) => (
-          <li key={s.label}><span className="swatch dashed" style={{ borderColor: '#6d28d9' }} aria-hidden="true" />{s.label}: {fmt(s.value, digits)}</li>
-        ))}
-      </ul>
-      <p className="chart-note">
+      <p className={`chart-note ${flaggedIds.length ? 'flagged' : 'clean'}`}>
         {flaggedIds.length
           ? `Red diamonds break a rule: ${flaggedIds.join(', ')}.`
           : 'No build breaks a rule on this chart.'}
-        {hiddenSpecs.length > 0 &&
-          ` Not drawn because far outside the data: ${hiddenSpecs
-            .map((s) => `${s.label.toLowerCase()} ${fmt(s.value, digits)}`)
-            .join(', ')}.`}
       </p>
+      {flaggedIds.length > 0 && (
+        <ul className="rule-list" aria-label="Rules broken on this chart">
+          {rulesBroken(rules, buildIds).map(({ rule, builds }) => (
+            <li key={rule}>
+              <strong>Rule {rule}:</strong> {rulePhrase(rule, kind)} (Builds: {builds.map((b, k) => <span key={b} className="nb">{b}{k < builds.length - 1 ? ', ' : ''}</span>)})
+            </li>
+          ))}
+        </ul>
+      )}
     </figure>
   )
 }

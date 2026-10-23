@@ -1,7 +1,7 @@
 # AeroPrint dashboard (React + Vite)
 
 One page that shows what the AeroPrint API (`app/main.py`) computes: whether the titanium-bracket
-print process is capable, the X-bar/R and I-MR control charts, and a RELEASE / RETEST / QUARANTINE
+print process is capable, the X-bar/R and I-MR control charts, and a RELEASE / QUARANTINE
 decision for each build with the print parameter to investigate first.
 
 **This front end computes no statistics.** Every number comes from the API's JSON; the code here only

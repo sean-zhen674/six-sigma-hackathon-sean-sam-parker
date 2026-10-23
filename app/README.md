@@ -2,7 +2,7 @@
 
 A REST API (FastAPI) that checks whether a titanium-bracket 3D-printing process is in control
 and capable. Input: a CSV with one row per coupon (5 coupons per build; 5 required columns, 8 optional print-parameter columns, anything else ignored, see [`../docs/csv-format.md`](../docs/csv-format.md)). Output: X-bar/R and
-I-MR charts, Nelson rule flags, capability indices, and RELEASE / RETEST / QUARANTINE per build.
+I-MR charts, Nelson rule flags, capability indices, and RELEASE / QUARANTINE per build.
 
 All statistics are in `app/qc.py`; `app/main.py` only reads a CSV, calls `qc.analyze()` and returns
 the result. For the full explanation (formulas, assumptions, every function, inputs and the

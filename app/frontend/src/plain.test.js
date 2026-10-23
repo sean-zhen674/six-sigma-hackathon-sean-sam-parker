@@ -50,12 +50,12 @@ describe('explainRule (API rule text -> words)', () => {
 
 describe('chart titles', () => {
   it('spell out the chart kind and the unit', () => {
-    expect(chartTitle('xbar', 'Tensile strength', 'megapascals'))
-      .toBe('Tensile strength: Build average chart (X-bar), megapascals')
-    expect(chartTitle('r', 'Porosity', 'percent')).toBe('Porosity: Spread chart (R, the range), percent')
-    expect(chartTitle('i', 'Laser power', 'watts')).toBe('Laser power: Single value chart (I), watts')
-    expect(chartTitle('mr', 'Laser power', 'watts'))
-      .toBe('Laser power: Change-from-previous-build chart (moving range), watts')
+    expect(chartTitle('xbar', 'Tensile strength', 'MPa'))
+      .toBe('Tensile strength: Build average chart (X-bar), MPa')
+    expect(chartTitle('r', 'Porosity', '%')).toBe('Porosity: Spread chart (R, the range), %')
+    expect(chartTitle('i', 'Laser power', 'W')).toBe('Laser power: Single value chart (I), W')
+    expect(chartTitle('mr', 'Laser power', 'W'))
+      .toBe('Laser power: Moving range chart (MR), W')
   })
 })
 
@@ -170,7 +170,7 @@ describe('capital letter after a colon in the displayed text', () => {
   const add = (v) => { if (typeof v === 'string') shown.push(v); else if (Array.isArray(v)) v.forEach(add); else if (v && typeof v === 'object') Object.values(v).forEach(add) }
   add(TEXT); add(QUALITY.map((q) => q.indexName)); add(LEGEND_RULES); add(CHART_HELP); add(UNRELIABLE_TEXT)
   add(DATASET_TEXT); add(COLUMN_MEANINGS); add(TOUR_STEPS)
-  for (const k of ['xbar', 'r', 'i', 'mr']) add(chartTitle(k, 'Tensile strength', 'megapascals'))
+  for (const k of ['xbar', 'r', 'i', 'mr']) add(chartTitle(k, 'Tensile strength', 'MPa'))
   for (const r of ['uts X-bar rule 5', 'porosity R rule 1']) add(explainRule(r))
   for (const n of [
     'uts_MPa: baseline coupons look non-normal (Shapiro-Wilk p = 0.012); indices are approximate',

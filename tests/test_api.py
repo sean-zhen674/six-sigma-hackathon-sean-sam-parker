@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 ROOT = Path(__file__).resolve().parent.parent
+BUILD_KEYS = {"build_id", "timestamp", "disposition", "rules_broken", "investigate_first"}  # the fields of one build
 DATA = ROOT / "data"
 client = TestClient(app)
 
@@ -48,6 +49,7 @@ def test_marginal_spread_is_in_control_but_one_index_is_below_the_minimum():
     assert body["process_capable"] is False
     assert body["first_out_of_control_build"] is None
     assert {b["disposition"] for b in body["builds"]} == {"RELEASE"}
+    assert all(set(b) == BUILD_KEYS for b in body["builds"])
     cap = body["capability"]
     assert cap["dimensional_dev_mm"]["cpk"] == pytest.approx(1.192, abs=0.0005)
     assert cap["dimensional_dev_mm"]["reliable"] is True
@@ -109,9 +111,9 @@ def test_spec_override_changes_the_specs_used():
     assert specs["dimensional_dev_mm"]["usl"] == 0.2
 
 
-def test_baseline_n_below_5_is_rejected():
+def test_baseline_n_below_3_is_rejected():
     content = (DATA / "capable_baseline.csv").read_bytes()
-    assert post_csv(content, baseline_n=3).status_code == 422
+    assert post_csv(content, baseline_n=2).status_code == 422
 
 
 def test_missing_column_is_422_and_names_it():
@@ -231,8 +233,8 @@ def test_dim_lsl_not_below_dim_usl_is_422_with_a_message(method):
     assert "usl must be greater than lsl" in r.json()["detail"]
 
 
-def test_get_with_baseline_n_3_is_422():
-    assert client.get("/analyze/oxygen_drift", params={"baseline_n": 3}).status_code == 422
+def test_get_with_baseline_n_2_is_422():
+    assert client.get("/analyze/oxygen_drift", params={"baseline_n": 2}).status_code == 422
 
 
 @pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])

@@ -14,7 +14,7 @@ help the contractor fix it.
 **Users:**
 
 - **Supplier quality engineer.** Signs off each build after its 5 witness coupons come back from
-  tensile and porosity testing. Decision: release the build, retest it, or quarantine it.
+  tensile and porosity testing. Decision: release the build or quarantine it.
 - **Additive manufacturing (AM) process engineer.** Uses the same screen to see which print
   parameter drifted (chamber oxygen, laser power, ...).
 
@@ -106,8 +106,7 @@ point that completes the pattern.
 ### Build disposition (what to do with each build)
 
 1. **QUARANTINE**: the build breaks a rule on the UTS or porosity X-bar or R chart.
-2. **RETEST**: no rule is broken, but at least one coupon is outside a spec limit.
-3. **RELEASE**: neither of the above.
+2. **RELEASE**: no rule is broken on this build.
 
 Dimensional-deviation rules are listed for the build but do not quarantine it.
 
@@ -208,7 +207,7 @@ call them and display the result. Inputs and errors below come from the real sig
 | `capability(xbarbar, rbar, lsl=None, usl=None, in_control=True)` | `xbarbar`: grand mean; `rbar`: mean range | `lsl`, `usl`: spec limits (at least one); `in_control`: is the chart in control | dict: `sigma_hat`, `cpl`, `cpu`, `cp`, `cpk`, `reliable`, `capable`, `message`. Unused indices are `None`. `rbar` = 0 gives all indices `None` plus a message | `ValueError`: no limit given, `usl` <= `lsl`, negative `rbar` |
 | `normality(values, always_warn=None)` | `values`: baseline coupon values | `always_warn`: text always added to the warning (used for porosity) | dict `{"p_value", "warning"}` (Shapiro-Wilk; `p_value` is `None` for fewer than 3 values or constant data) | none |
 | `imr(values, baseline_n=20)` | `values`: one number per build | `baseline_n` | dict: `points`, `moving_ranges`, `cl`, `mr_bar`, `sigma`, `ucl`, `lcl`, `mr_ucl`, `flags` (rules 1-8), `mr_flags` (rule 1), `baseline_n_used`, `message`. If MR-bar is 0, limits are `None` with a message | `ValueError`: fewer than 2 values, NaN, `baseline_n` < 2 |
-| `disposition(rules_broken, any_out_of_spec)` | `rules_broken`: per build, a list of rule texts; `any_out_of_spec`: per build, True/False | none | list of `"QUARANTINE"`, `"RETEST"` or `"RELEASE"`, one per build | `ValueError`: the two lists differ in length |
+| `disposition(rules_broken)` | `rules_broken`: per build, a list of rule texts | none | list of `"QUARANTINE"` or `"RELEASE"`, one per build | none |
 | `rank_parameters(params_df, baseline_n=20)` | `params_df`: one row per build, in time order, one column per build parameter | `baseline_n` | dict: `charts` (I-MR per parameter), `ranking` ({build index: parameters sorted by largest abs z}), `skipped` (parameters with zero baseline sigma) | `ValueError` from `imr` (fewer than 2 builds, NaN) |
 | `analyze(df, specs=None, baseline_n=20)` | `df`: coupon table with the 5 required columns (+ optional print parameters; other columns ignored) | `specs`: optional spec overrides; `baseline_n` | JSON-safe dict: `build_ids`, `charts`, `capability`, `process_capable`, `first_out_of_control_build`, `builds` (disposition, rules broken, investigate first), `warnings`, `settings` | `ValueError`: missing required columns, text or blank cells in a used column, bad `build_timestamp`, a build without exactly 5 coupons, unknown spec column, and every error from `xbar_r` |
 
@@ -251,8 +250,8 @@ docs are at `/docs`. Examples assume the API is running on `http://localhost:800
 | `GET /health` | none | `{"status": "ok"}` |
 | `GET /datasets` | none | `{"datasets": [{"name", "description"}, ...]}` (the 3 bundled files) |
 | `GET /spec-limits` | none | `{"specs": {column: {"lsl", "usl", "target"}}}` |
-| `GET /analyze/{dataset}` | path: dataset name; query: `baseline_n` (>= 5, default 20) | the full `analyze()` result. 404 for an unknown name |
-| `POST /analyze` | form file `file` (CSV); query: `baseline_n` (>= 5, default 20), `uts_lsl`, `porosity_usl`, `dim_lsl`, `dim_usl` | the full `analyze()` result. 422 `{"detail": "..."}` for bad input |
+| `GET /analyze/{dataset}` | path: dataset name; query: `baseline_n` (>= 3, default 20) | the full `analyze()` result. 404 for an unknown name |
+| `POST /analyze` | form file `file` (CSV); query: `baseline_n` (>= 3, default 20), `uts_lsl`, `porosity_usl`, `dim_lsl`, `dim_usl` | the full `analyze()` result. 422 `{"detail": "..."}` for bad input |
 
 ```bash
 curl http://localhost:8000/health
@@ -282,7 +281,7 @@ Each `builds` entry looks like this (real output for B-1023 of `oxygen_drift`):
 
 ```json
 {"build_id": "B-1023", "timestamp": "2026-02-18T08:00:00", "disposition": "QUARANTINE",
- "any_coupon_out_of_spec": false, "rules_broken": ["uts X-bar rule 1", "uts X-bar rule 5"],
+ "rules_broken": ["uts X-bar rule 1", "uts X-bar rule 5"],
  "investigate_first": [{"parameter": "chamber_oxygen_ppm", "z": 9.438, "rules": [1, 5]}]}
 ```
 

@@ -16,8 +16,8 @@ import { QUALITY, PARAMS, LEGEND_RULES, TEXT } from './labels.js'
 // Identifiers such as uts_MPa or chamber_oxygen_ppm are column names the user must type; they have
 // underscores, so the word-boundary regexes below do not match inside them.
 
-const PAREN_ONLY = ['LSL', 'USL', 'UCL', 'LCL', 'CL', 'UTS', 'CSV', 'API', 'MPa', 'ppm', 'Cpl', 'Cpu', 'Cpk']
-const NEVER = ['e.g.', 'vs.', 'vs', 'approx', 'pct', 'mm/s', 'n/a', 'min', 'max', 'dev', 'spec', 'µm', '°C']
+const PAREN_ONLY = ['LSL', 'USL', 'UCL', 'LCL', 'CL', 'UTS', 'CSV', 'API', 'Cpl', 'Cpu', 'Cpk']
+const NEVER = ['e.g.', 'vs.', 'vs', 'approx', 'pct', 'n/a', 'min', 'max', 'dev', 'spec']
 
 function containsWord(text, word) {
   const escaped = word.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
@@ -29,7 +29,8 @@ function containsWord(text, word) {
 // (SPEC_FIELDS[].label). Everywhere else they are banned, even inside a parenthesis, so the
 // exception cannot spread. "MPa" keeps the old rule: only inside a parenthesis after the plain words
 // (so "megapascals (MPa)" is fine, and the four labels pass it too).
-const ONLY_IN_CONTROL_LABELS = ['mm', '%']
+// (Later, the team asked for every unit as its symbol: MPa, %, mm, ppm, W, mm/s, µm and °C are allowed everywhere.)
+const ONLY_IN_CONTROL_LABELS = []
 const CONTROL_LABELS = SPEC_FIELDS.map((f) => f.label)
 // The two dimensional boxes also show the shorter visible form under their group heading.
 const CONTROL_TEXTS = [...CONTROL_LABELS, ...SPEC_FIELDS.map((f) => f.short).filter(Boolean)]
@@ -69,23 +70,15 @@ describe('the guard itself', () => {
     expect(offenders('UTS LSL (MPa)')).toEqual(expect.arrayContaining(['UTS', 'LSL']))
     expect(offenders('Upload your CSV')).toContain('CSV')
     expect(offenders('about 15 pct, approx, e.g. this')).toEqual(expect.arrayContaining(['pct', 'approx', 'e.g.']))
-    expect(offenders('speed in mm/s and 100 ppm')).toEqual(expect.arrayContaining(['mm/s', 'ppm']))
+    expect(offenders('speed in mm/s and 100 ppm')).toEqual([]) // unit symbols are allowed
     expect(offenders('n/a')).toContain('n/a')
   })
   it('does not trip on column names', () => {
     expect(offenders('uts_MPa, chamber_oxygen_ppm and scan_speed_mm_s')).toEqual([])
   })
-  it('allows (mm) and (%) in the four control labels only', () => {
+  it('allows unit symbols everywhere', () => {
     for (const label of CONTROL_LABELS) expect(offenders(label)).toEqual([])
-    expect(offenders('Porosity: Highest Allowed (%)')).toEqual([])
-    expect(offenders('Dimensional Deviation: Lowest Allowed (mm)')).toEqual([])
-    expect(offenders('Highest Allowed (mm)')).toEqual([]) // the short form under the group heading
-    // the same abbreviations anywhere else are caught, even inside a parenthesis
-    expect(offenders('Porosity is about 0.2 (%) here')).toContain('%')
-    expect(offenders('a gap of 0.1 (mm)')).toContain('mm')
-    expect(offenders('Lowest Allowed (mm) with extra words')).toContain('mm')
-    expect(offenders('Lowest Allowed (megapascals)')).toEqual([])
-    expect(offenders('about 15%')).toContain('%')
+    expect(offenders('Porosity is about 0.2 % here, 15 mm, 280 W, 100 ppm, 35 °C, 1200 mm/s, 30 µm, 950 MPa')).toEqual([])
   })
   it('the four control labels are the Title Case form with the unit in parentheses', () => {
     expect(CONTROL_LABELS).toEqual([

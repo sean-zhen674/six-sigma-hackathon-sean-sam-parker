@@ -5,31 +5,31 @@
 export const COLUMN_MEANINGS = {
   build_id: 'The build name, such as B-1001',
   build_timestamp: 'When the build was made',
-  uts_MPa: 'Tensile strength of the coupon, in megapascals',
-  porosity_pct: 'Porosity of the coupon, in percent',
-  dimensional_dev_mm: 'Dimensional deviation of the coupon, in millimeters',
-  laser_power_W: 'Laser power, in watts',
-  scan_speed_mm_s: 'Scan speed, in millimeters per second',
-  layer_thickness_um: 'Layer thickness, in micrometers',
-  chamber_oxygen_ppm: 'Chamber oxygen, in parts per million',
-  humidity_pct: 'Humidity, in percent',
-  powder_bed_temp_C: 'Powder bed temperature, in degrees Celsius',
-  build_plate_temp_C: 'Build plate temperature, in degrees Celsius',
-  stress_relief_temp_C: 'Stress relief temperature, in degrees Celsius',
+  uts_MPa: 'Tensile strength of the coupon, in MPa',
+  porosity_pct: 'Porosity of the coupon, in %',
+  dimensional_dev_mm: 'Dimensional deviation of the coupon, in mm',
+  laser_power_W: 'Laser power, in W',
+  scan_speed_mm_s: 'Scan speed, in mm/s',
+  layer_thickness_um: 'Layer thickness, in µm',
+  chamber_oxygen_ppm: 'Chamber oxygen, in ppm',
+  humidity_pct: 'Humidity, in %',
+  powder_bed_temp_C: 'Powder bed temperature, in °C',
+  build_plate_temp_C: 'Build plate temperature, in °C',
+  stress_relief_temp_C: 'Stress relief temperature, in °C',
 }
 
 /** Dataset descriptions in plain words, keyed by dataset name; other names use the API's text. */
 export const DATASET_TEXT = {
-  capable_baseline: 'Capable Baseline: A healthy process in control, every capability index at least 1.33, so every build should be released.',
-  oxygen_drift: 'Oxygen Drift: Chamber oxygen creeps up from build 21; look for tensile strength falling and porosity rising.',
-  marginal_spread: 'Marginal Spread: In control on every build, but the parts vary too much in size, so the dimensional deviation capability index is below 1.33 and the process is not capable.',
+  capable_baseline: 'Capable Baseline: A healthy process in control. Every capability index at least 1.33, so every build can be released.',
+  oxygen_drift: 'Oxygen Drift: Chamber oxygen creeps up from build 21. Look for tensile strength falling and porosity rising.',
+  marginal_spread: 'Marginal Spread: In-control on every build, but the parts vary too much in size, so the dimensional deviation capability index is below 1.33 and the process is not capable.',
 }
 
 export function datasetText(name, apiText) {
   return DATASET_TEXT[name] || apiText || ''
 }
 
-/** The short tag drawn inside a chart for an allowed-value line (the chart legend spells it out). */
+/** The short tag drawn inside a chart for an allowed-value line. */
 export function specTag(label) {
   return String(label).replace(/ value$/, '')
 }
@@ -46,6 +46,12 @@ export const RULE_PHRASES = {
   8: 'eight builds in a row far from the center line, on either side',
 }
 const R_CHART_RULE_1 = 'one build above the upper control limit'
+
+/** Rule number + chart kind -> the rule in words, starting with a capital letter and without the rule number. */
+export function rulePhrase(rule, kind) {
+  const phrase = (kind === 'r' || kind === 'mr') && Number(rule) === 1 ? R_CHART_RULE_1 : RULE_PHRASES[rule]
+  return phrase ? phrase.charAt(0).toUpperCase() + phrase.slice(1) : `Rule ${rule}`
+}
 
 /** Rule number + chart kind ('xbar' | 'r' | 'i' | 'mr') -> words, ending with the rule number. */
 export function ruleTip(rule, kind) {
@@ -73,12 +79,12 @@ const KIND_WORDS = {
   xbar: 'build average chart (X-bar)',
   r: 'spread chart (R, the range)',
   i: 'single value chart (I)',
-  mr: 'change-from-previous-build chart (moving range)',
+  mr: 'moving range chart (MR)',
 }
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1)
 
-/** Chart title, for example 'Tensile strength: Build average chart (X-bar), megapascals'. */
+/** Chart title, for example 'Tensile strength: Build average chart (X-bar), MPa'. */
 export function chartTitle(kind, subject, unit) {
   return `${subject}: ${capital(KIND_WORDS[kind])}${unit ? `, ${unit}` : ''}`
 }

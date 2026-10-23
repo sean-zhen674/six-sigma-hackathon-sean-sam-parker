@@ -8,7 +8,7 @@ export const TOUR_STEPS = [
   { title: 'Pick your data', text: 'Use "Select an example dataset" to pick a built-in example, or "Upload dataset" to analyze your own spreadsheet file (CSV), with one row per coupon and 5 coupons per build.' },
   { title: 'Read the banner', text: 'The banner says whether the process is capable, and whether the numbers can be trusted. A grey number with a warning means the chart is out of control, so do not rely on it.' },
   { title: 'Find the red diamonds', text: 'On the charts, a red diamond is a build that looks different from the baseline builds. The first one marks when the process changed.' },
-  { title: 'Act on each build', text: 'The table at the bottom says what to do with each build (release, retest or quarantine) and which parameter to investigate first.' },
+  { title: 'Act on each build', text: 'The table at the bottom says what to do with each build (release or quarantine) and which parameter to investigate first.' },
 ]
 
 export function tourSeen(storage) {

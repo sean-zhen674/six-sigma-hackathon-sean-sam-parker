@@ -51,7 +51,7 @@ app = FastAPI(
     description=(
         "Monitors a titanium-bracket 3D-printing process with X-bar/R and I-MR control charts, "
         "Nelson rules, capability indices (within-build sigma = R-bar/d2) and a build disposition "
-        "(RELEASE / RETEST / QUARANTINE). All statistics live in qc.py."
+        "(RELEASE / QUARANTINE). All statistics live in qc.py."
     ),
     version="1.0.0",
 )
@@ -127,7 +127,7 @@ async def spec_limits():
 @app.get("/analyze/{dataset}")
 async def analyze_dataset(
     dataset: str,
-    baseline_n: int = Query(20, ge=5, description="number of first builds used for the control limits"),
+    baseline_n: int = Query(20, ge=3, description="number of first builds used for the control limits"),
     uts_lsl: Optional[float] = Query(None, description="UTS lower spec limit, MPa (default 900)"),
     porosity_usl: Optional[float] = Query(None, description="porosity upper spec limit, % (default 0.5)"),
     dim_lsl: Optional[float] = Query(None, description="dimensional deviation lower limit, mm (default -0.10)"),
@@ -144,7 +144,7 @@ async def analyze_dataset(
 @app.post("/analyze")
 async def analyze_upload(
     file: UploadFile = File(..., description="CSV, one row per coupon, 5 coupons per build. Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm. The 8 print-parameter columns are optional; other columns are ignored. See docs/csv-format.md"),
-    baseline_n: int = Query(20, ge=5, description="number of first builds used for the control limits"),
+    baseline_n: int = Query(20, ge=3, description="number of first builds used for the control limits"),
     uts_lsl: Optional[float] = Query(None, description="UTS lower spec limit, MPa (default 900)"),
     porosity_usl: Optional[float] = Query(None, description="porosity upper spec limit, % (default 0.5)"),
     dim_lsl: Optional[float] = Query(None, description="dimensional deviation lower limit, mm (default -0.10)"),

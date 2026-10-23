@@ -4,7 +4,7 @@ import ControlChart from './ControlChart.jsx'
 import CsvHelp from './CsvHelp.jsx'
 import Tour from './Tour.jsx'
 import {
-  BASELINE_MIN, DEFAULT_BASELINE, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
+  BASELINE_MIN, DEFAULT_BASELINE, isNarrowScreen, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
   iProps, mrProps, plainNote, rProps, specDefaults, suspectText, summarySentence, validateSpecs, xbarProps,
 } from './format.js'
 import { LEGEND_RULES, MAIN_PARAMS, PARAMS, QUALITY, TEXT } from './labels.js'
@@ -17,14 +17,6 @@ import { markTourSeen, tourSeen } from './tour.js'
 function describe(datasets, name) {
   const found = datasets.find((d) => d.name === name)
   return found ? found.description : ''
-}
-
-function specLines(spec) {
-  if (!spec) return []
-  return [
-    { label: 'Lowest allowed value', value: spec.lsl },
-    { label: 'Highest allowed value', value: spec.usl },
-  ].filter((s) => s.value !== null && s.value !== undefined)
 }
 
 export default function App() {
@@ -43,6 +35,7 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [narrow, setNarrow] = useState(() => isNarrowScreen(window.innerWidth)) // window too narrow for readable charts
   const latest = useRef(0) // ignore answers that arrive after a newer request
 
   function closeTour() {
@@ -94,6 +87,12 @@ export default function App() {
       if (id === latest.current) setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const onResize = () => setNarrow(isNarrowScreen(window.innerWidth))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     async function start() {
@@ -168,6 +167,7 @@ export default function App() {
       {tourOpen && <Tour onClose={closeTour} />}
 
       <main>
+        {narrow && (<p className="narrow-warning" role="note"><span aria-hidden="true">⚠</span> {TEXT.narrowScreen}</p>)}
         <form className="controls" onSubmit={onSubmit} aria-label="Data and parameters">
           <section className="card" aria-labelledby="dataset-h">
             <h2 id="dataset-h" className="card-title">{TEXT.datasetHeading}</h2>
@@ -234,7 +234,7 @@ export default function App() {
           <BaselineControl value={baselineN} error={baselineError} loading={loading}
             onChange={(v) => { setBaselineN(v); setBaselineError(null) }} onApply={applyBaseline} />
         </ChartsSection>
-        {result && <BuildTable builds={result.builds} hasParams={Object.keys(result.charts.imr).length > 0} />}
+        {result && <BuildTable builds={result.builds} capable={result.process_capable} hasParams={Object.keys(result.charts.imr).length > 0} />}
         <Legend />
       </main>
     </>
@@ -266,7 +266,7 @@ function BaselineControl({ value, error, loading, onChange, onApply }) {
             onBlur={onApply} />
           <button type="button" className="secondary" onClick={onApply} disabled={loading}>{TEXT.updateCharts}</button>
         </div>
-        <p id="baseline-desc" className="helper">{TEXT.baselineHelp}</p>
+        <p id="baseline-desc" className="helper">{TEXT.baselineHelp}<br />{TEXT.baselineDefaults}</p>
         {error && <p className="error" role="alert" id="baseline-error">{error}</p>}
       </div>
     </div>
@@ -284,7 +284,7 @@ function Summary({ result }) {
       <section className={`banner ${capable ? 'yes' : 'no'}`} aria-labelledby="banner-h">
         <h2 id="banner-h">
           <span aria-hidden="true">{capable ? '✔' : '✖'}</span>{' '}
-          Process Capable: {capable ? 'Yes' : 'No'}
+          Process Capable? {capable ? 'Yes' : 'No'}
         </h2>
         <p className="first-ooc">
           First out-of-control build: <strong>{first ?? 'None'}</strong>
@@ -313,7 +313,7 @@ function Summary({ result }) {
           })}
         </ul>
         <p className="how">
-          How to read this: {TEXT.howToRead.replace('{threshold}', fmt(threshold, 2))}
+          {TEXT.howToRead.replace('{threshold}', fmt(threshold, 2))}
         </p>
         {result.warnings.length > 0 && (
           <details>
@@ -323,7 +323,10 @@ function Summary({ result }) {
         )}
       </section>
 
-      <p className="summary" id="summary">{summarySentence(result)}</p>
+      <section className="summary" id="summary" aria-labelledby="summary-h">
+        <h2 id="summary-h">Summary</h2>
+        <p>{summarySentence(result)}</p>
+      </section>
     </>
   )
 }
@@ -331,8 +334,10 @@ function Summary({ result }) {
 /** The Control charts section. `result` is null while loading or after an error; the baseline box (children) stays. */
 function ChartsSection({ result, children }) {
   const baselineUsed = result ? result.settings.baseline_n_used : null
-  const otherParams = result ? Object.keys(result.charts.imr).filter((n) => !MAIN_PARAMS.includes(n)) : []
-  const hasParams = result ? Object.keys(result.charts.imr).length > 0 : false
+  const paramNames = result
+    ? [...MAIN_PARAMS.filter((name) => result.charts.imr[name]), ...Object.keys(result.charts.imr).filter((name) => !MAIN_PARAMS.includes(name))]
+    : []
+  const hasParams = paramNames.length > 0
   return (
     <section aria-labelledby="charts-h">
       <h2 id="charts-h">Control charts</h2>
@@ -340,66 +345,82 @@ function ChartsSection({ result, children }) {
       {children}
       {result && (
         <>
-        {QUALITY.filter((q) => q.key !== 'dimensional_dev_mm').map((q) => (
+        <h2>{TEXT.qualityHeading}</h2>
+        {QUALITY.map((q) => (
           <QualityCharts key={q.key} q={q} result={result} baselineUsed={baselineUsed} />
         ))}
-        <details>
-          <summary>{TEXT.dimensionalSummary}</summary>
-          <QualityCharts q={QUALITY[2]} result={result} baselineUsed={baselineUsed} />
-        </details>
 
         <h2>{TEXT.paramsHeading}</h2>
         {!hasParams && <p className="param-note">{TEXT.noParams}</p>}
-        {MAIN_PARAMS.filter((name) => result.charts.imr[name]).map((name) => (
-          <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} withMr />
+        {paramNames.map((name, k) => (
+          <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} defaultOpen={k === 0} />
         ))}
-        {otherParams.length > 0 && (
-          <details>
-            <summary>{TEXT.otherParamsSummary}</summary>
-            {otherParams.map((name) => (
-              <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} />
-            ))}
-          </details>
-        )}
         </>
       )}
     </section>
   )
 }
 
+/** Number of builds that broke at least one rule on any of the given charts (each has a rules array per point). */
+function flaggedBuilds(...charts) {
+  const flagged = new Set()
+  charts.forEach((c) => c.rules.forEach((r, i) => { if (r && r.length > 0) flagged.add(c.buildIds ? c.buildIds[i] : i) }))
+  return flagged.size
+}
+
+/** One row of charts inside a drop-down: the title, whether any rule was broken (so a closed row still tells you), then the charts. */
+function ChartRow({ title, flagged, defaultOpen, children }) {
+  return (
+    <details className="chart-row" open={defaultOpen}>
+      <summary>
+        {title}{' '}
+        {flagged > 0
+          ? <span className="row-status flagged"><span aria-hidden="true">✖</span> Rule broken</span>
+          : <span className="row-status clean"><span aria-hidden="true">✔</span> No rule broken</span>}
+      </summary>
+      {children}
+    </details>
+  )
+}
+
 function QualityCharts({ q, result, baselineUsed }) {
   const chart = result.charts[q.key]
   const ids = chart.build_ids
-  const spec = specLines(result.settings.specs[q.key])
+  const xb = xbarProps(chart, []) // the allowed values are for single coupons, so they are not drawn on a chart of build averages
+  const rr = rProps(chart)
   return (
-    <div className="chart-pair">
-      <ControlChart title={chartTitle('xbar', q.title, q.unit)} kind="xbar" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
-        digits={q.digits} {...xbarProps(chart, spec)} />
-      <ControlChart title={chartTitle('r', q.title, q.unit)} kind="r" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
-        digits={q.digits} {...rProps(chart)} />
-    </div>
+    <ChartRow title={q.title} flagged={flaggedBuilds(xb, rr)} defaultOpen>
+      <div className="chart-pair">
+        <ControlChart title={chartTitle('xbar', q.title, q.unit)} kind="xbar" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
+          digits={q.digits} {...xb} />
+        <ControlChart title={chartTitle('r', q.title, q.unit)} kind="r" unit={q.unit} buildIds={ids} baselineN={baselineUsed}
+          digits={q.digits} {...rr} />
+      </div>
+    </ChartRow>
   )
 }
 
-function ParamCharts({ name, p, ids, baselineUsed, withMr }) {
+function ParamCharts({ name, p, ids, baselineUsed, defaultOpen }) {
   const meta = PARAMS[name] || { title: name, unit: '', digits: 2 }
+  const ip = iProps(p)
+  const mp = mrProps(p)
   return (
-    <div className="chart-pair">
-      <ControlChart title={chartTitle('i', meta.title, meta.unit)} kind="i" unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
-        digits={meta.digits} {...iProps(p)} />
-      {withMr && (
+    <ChartRow title={meta.title} flagged={flaggedBuilds(ip, mp)} defaultOpen={defaultOpen}>
+      <div className="chart-pair">
+        <ControlChart title={chartTitle('i', meta.title, meta.unit)} kind="i" unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
+          digits={meta.digits} {...ip} />
         <ControlChart title={chartTitle('mr', meta.title, meta.unit)} kind="mr" unit={meta.unit} buildIds={ids} baselineN={baselineUsed}
-          digits={meta.digits} {...mrProps(p)} />
-      )}
-    </div>
+          digits={meta.digits} {...mp} />
+      </div>
+    </ChartRow>
   )
 }
 
-const BADGE_ICON = { RELEASE: '✔', RETEST: '▲', QUARANTINE: '✖' }
+const BADGE_ICON = { RELEASE: '✔', QUARANTINE: '✖' }
 
-function BuildTable({ builds, hasParams }) {
+function BuildTable({ builds, capable, hasParams }) {
   const [onlyFlagged, setOnlyFlagged] = useState(false)
-  const rows = onlyFlagged ? builds.filter((b) => b.disposition !== 'RELEASE') : builds
+  const rows = onlyFlagged ? builds.filter((b) => b.disposition === 'QUARANTINE') : builds
   return (
     <section aria-labelledby="table-h">
       <h2 id="table-h">Builds</h2>
@@ -407,9 +428,10 @@ function BuildTable({ builds, hasParams }) {
         <input type="checkbox" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} />
         {TEXT.flaggedToggle}
       </label>
+      {!capable && <p className="not-capable-note" role="note"><span aria-hidden="true">⚠</span> {TEXT.notCapableTable}</p>}
       <p className="muted">{rows.length} of {builds.length} builds shown.</p>
       {!hasParams && <p className="muted">{TEXT.noParamsShort}</p>}
-      <div className="table-wrap">
+      <div className={`table-wrap${capable ? '' : ' greyed'}`}>
         <table>
           <thead>
             <tr>
@@ -426,10 +448,13 @@ function BuildTable({ builds, hasParams }) {
                 <th scope="row">{b.build_id}</th>
                 <td>{fmtTime(b.timestamp)}</td>
                 <td>
-                  <span className={`badge ${b.disposition.toLowerCase()}`}>
-                    <span aria-hidden="true">{BADGE_ICON[b.disposition]}</span> {b.disposition}
-                  </span>
-                  {b.any_coupon_out_of_spec && <div className="muted">{TEXT.couponOut}</div>}
+                  {!capable && b.disposition === 'RELEASE'
+                    ? <span className="badge held"><span aria-hidden="true">✖</span> NOT RELEASED</span>
+                    : (
+                      <span className={`badge ${b.disposition.toLowerCase()}`}>
+                        <span aria-hidden="true">{BADGE_ICON[b.disposition]}</span> {b.disposition}
+                      </span>
+                    )}
                 </td>
                 <td>
                   {b.rules_broken.length
@@ -457,7 +482,6 @@ function Legend() {
       <p><strong>Disposition.</strong></p>
       <ul>
         <li><strong>QUARANTINE</strong>: {TEXT.quarantine}</li>
-        <li><strong>RETEST</strong>: {TEXT.retest}</li>
         <li><strong>RELEASE</strong>: {TEXT.release}</li>
       </ul>
       <p className="muted">{TEXT.falseAlarms}</p>

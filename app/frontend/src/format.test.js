@@ -3,7 +3,7 @@ import {
   fmt, fmtTime, shortBuild, errorText, topSuspect, suspectText,
   perPointRules, listToPerPoint, capabilityRow, mrProps,
   friendlyParam, summarySentence, validateSpecs, analysisQuery, specDefaults, isUnreliable, CHART_HELP,
-  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, baselineChange, DEFAULT_BASELINE, BASELINE_MIN,
+  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, baselineChange, DEFAULT_BASELINE, BASELINE_MIN, rulesBroken, isNarrowScreen, NARROW_SCREEN_PX,
 } from './format.js'
 import { TEXT } from './labels.js'
 
@@ -36,9 +36,9 @@ describe('top suspect', () => {
   const build = { investigate_first: [{ parameter: 'chamber_oxygen_ppm', z: 9.438, rules: [1, 5] }] }
   it('takes the first (largest |z|) entry the API sent', () => {
     expect(topSuspect(build).parameter).toBe('chamber_oxygen_ppm')
-    expect(suspectText(build)).toBe('chamber oxygen (parts per million): 9.4 standard deviations above the center line')
+    expect(suspectText(build)).toBe('chamber oxygen (ppm): 9.4 standard deviations above the center line')
     expect(suspectText({ investigate_first: [{ parameter: 'laser_power_W', z: -37.04, rules: [1] }] }))
-      .toBe('laser power (watts): 37.0 standard deviations below the center line')
+      .toBe('laser power (W): 37.0 standard deviations below the center line')
   })
   it('is a dash when there is none', () => {
     expect(topSuspect({ investigate_first: [] })).toBeNull()
@@ -100,7 +100,7 @@ describe('capabilityRow', () => {
 describe('chartsIntro is a list of four short bullets', () => {
   it('has four items, none of them one long paragraph', () => {
     expect(Array.isArray(TEXT.chartsIntro)).toBe(true)
-    expect(TEXT.chartsIntro).toHaveLength(4)
+    expect(TEXT.chartsIntro).toHaveLength(3)
     expect(TEXT.chartsIntro[0]).toBe('Blue shading: Baseline builds used to calculate the limits.')
     expect(TEXT.chartsIntro.every((t) => t.length < 100)).toBe(true)
   })
@@ -117,14 +117,14 @@ describe('unreliable indices', () => {
 
 describe('friendlyParam', () => {
   it('uses plain names, and falls back to the column name', () => {
-    expect(friendlyParam('chamber_oxygen_ppm')).toBe('chamber oxygen (parts per million)')
-    expect(friendlyParam('laser_power_W')).toBe('laser power (watts)')
-    expect(friendlyParam('scan_speed_mm_s')).toBe('scan speed (millimeters per second)')
-    expect(friendlyParam('layer_thickness_um')).toBe('layer thickness (micrometers)')
-    expect(friendlyParam('humidity_pct')).toBe('humidity (percent)')
-    expect(friendlyParam('powder_bed_temp_C')).toBe('powder bed temperature (degrees Celsius)')
-    expect(friendlyParam('build_plate_temp_C')).toBe('build plate temperature (degrees Celsius)')
-    expect(friendlyParam('stress_relief_temp_C')).toBe('stress relief temperature (degrees Celsius)')
+    expect(friendlyParam('chamber_oxygen_ppm')).toBe('chamber oxygen (ppm)')
+    expect(friendlyParam('laser_power_W')).toBe('laser power (W)')
+    expect(friendlyParam('scan_speed_mm_s')).toBe('scan speed (mm/s)')
+    expect(friendlyParam('layer_thickness_um')).toBe('layer thickness (µm)')
+    expect(friendlyParam('humidity_pct')).toBe('humidity (%)')
+    expect(friendlyParam('powder_bed_temp_C')).toBe('powder bed temperature (°C)')
+    expect(friendlyParam('build_plate_temp_C')).toBe('build plate temperature (°C)')
+    expect(friendlyParam('stress_relief_temp_C')).toBe('stress relief temperature (°C)')
     expect(friendlyParam('mystery_col')).toBe('mystery_col')
   })
 })
@@ -143,27 +143,17 @@ describe('summarySentence', () => {
   it('out of control with a suspect: first build, count, friendly cause', () => {
     const r = { process_capable: false, first_out_of_control_build: 'B-1023', builds: swap(rel(30), 22, 8, 'QUARANTINE', 'chamber_oxygen_ppm') }
     expect(summarySentence(r)).toBe(
-      'From build B-1023 the process went out of control; 8 builds should be quarantined. Most likely cause: Chamber oxygen (parts per million).')
+      'From build B-1023 the process went out of control; 8 builds should be quarantined. Most likely cause: Chamber oxygen (ppm).')
   })
   it('one quarantined build reads in the singular', () => {
     const r = { process_capable: false, first_out_of_control_build: 'B-1024', builds: swap(rel(30), 23, 1, 'QUARANTINE', 'laser_power_W') }
     expect(summarySentence(r)).toBe(
-      'From build B-1024 the process went out of control; 1 build should be quarantined. Most likely cause: Laser power (watts).')
+      'From build B-1024 the process went out of control; 1 build should be quarantined. Most likely cause: Laser power (W).')
   })
   it('out of control with no suspect', () => {
     const r = { process_capable: false, first_out_of_control_build: 'B-1005', builds: swap(rel(30), 4, 2, 'QUARANTINE', null) }
     expect(summarySentence(r)).toBe(
       'From build B-1005 the process went out of control; 2 builds should be quarantined. No build parameter stands out as the cause.')
-  })
-  it('retest only, not capable: no rule broken', () => {
-    const r = { process_capable: false, first_out_of_control_build: null, builds: swap(rel(30), 10, 3, 'RETEST', null) }
-    expect(summarySentence(r)).toBe(
-      'No build broke a rule, but the process is not shown to be capable of the specification. 3 builds have a coupon outside the specification and should be retested.')
-  })
-  it('retest only, capable', () => {
-    const r = { process_capable: true, first_out_of_control_build: null, builds: swap(rel(30), 10, 1, 'RETEST', null) }
-    expect(summarySentence(r)).toBe(
-      'The process is in control and capable. 1 build has a coupon outside the specification and should be retested.')
   })
   it('in control but one index below the minimum: names the measure', () => {
     const cap = {
@@ -184,15 +174,9 @@ describe('summarySentence', () => {
     const r = { process_capable: false, first_out_of_control_build: null, builds: rel(3), capability: cap, settings: { capable_min_index: 1.33 } }
     expect(summarySentence(r)).toContain('Tensile strength and Porosity are below the minimum of 1.33')
   })
-  it('not capable, nothing to retest', () => {
+  it('not capable, no rule broken', () => {
     const r = { process_capable: false, first_out_of_control_build: null, builds: rel(30) }
     expect(summarySentence(r)).toBe('No build broke a rule, but the process is not shown to be capable of the specification.')
-  })
-  it('quarantine and retest together', () => {
-    const b = swap(swap(rel(30), 22, 2, 'QUARANTINE', 'chamber_oxygen_ppm'), 5, 1, 'RETEST', null)
-    const r = { process_capable: false, first_out_of_control_build: 'B-1023', builds: b }
-    expect(summarySentence(r)).toBe(
-      'From build B-1023 the process went out of control; 2 builds should be quarantined and 1 build retested. Most likely cause: Chamber oxygen (parts per million).')
   })
 })
 
@@ -268,7 +252,7 @@ describe('control labels', () => {
     expect(TEXT.datasetLabel).toBe('Select an example dataset')
     expect(TEXT.fileLabel).toBe('Upload dataset')
     expect(TEXT.datasetHeading).toBe('Dataset')
-    expect(TEXT.parametersHeading).toBe('Parameters')
+    expect(TEXT.parametersHeading).toBe('Test Parameters')
     expect(TEXT.baselineLabel).toBe('Baseline builds')
     expect(TEXT.githubLabel).toBe('GitHub repository')
     expect(TEXT.subtitle).toBeUndefined()
@@ -276,14 +260,14 @@ describe('control labels', () => {
   })
   it('the baseline helper explains the baseline in plain words', () => {
     expect(TEXT.baselineHelp).toBe(
-      'How many of the earliest builds are used to learn what normal looks like. The control limits are calculated from these builds, and every later build is compared against them. Default: 20, minimum: 5.')
+      'How many of the earliest builds are used to learn what normal looks like. The control limits are calculated from these builds, and every later build is compared against them.')
   })
 })
 
 describe('chart help text', () => {
   it('has one short line for each chart kind', () => {
     for (const k of ['xbar', 'r', 'i', 'mr']) expect(CHART_HELP[k].length).toBeLessThan(170)
-    expect(CHART_HELP.xbar).toContain('Red diamonds')
+    expect(CHART_HELP.xbar).not.toContain('Red diamonds')
   })
 })
 
@@ -352,7 +336,7 @@ describe('H-13 words', () => {
     expect(TEXT.resetHint).toBe('Puts the four allowed values back and sets Baseline builds back to 20.')
     expect(TEXT.glossary).toBeUndefined()
     expect(TEXT.limitsHint).toBeUndefined()
-    expect(TEXT.baselineHelp).toContain('Default: 20, minimum: 5.')
+    expect(TEXT.baselineDefaults).toBe('Default: 20, minimum: 3.')
     expect(TEXT.noParams).not.toMatch(/panel above/)
   })
 })
@@ -360,22 +344,46 @@ describe('H-13 words', () => {
 describe('baselineChange (Enter, blur and the Update charts button all use it)', () => {
   it('constants', () => {
     expect(DEFAULT_BASELINE).toBe(20)
-    expect(BASELINE_MIN).toBe(5)
+    expect(BASELINE_MIN).toBe(3)
   })
   it('a new valid whole number is applied', () => {
     expect(baselineChange(10, 20)).toEqual({ kind: 'apply', value: 10 })
     expect(baselineChange('10', 20)).toEqual({ kind: 'apply', value: 10 })
-    expect(baselineChange(5, 20)).toEqual({ kind: 'apply', value: 5 })
+    expect(baselineChange(3, 20)).toEqual({ kind: 'apply', value: 3 })
   })
   it('the same value as the last run sends nothing', () => {
     expect(baselineChange(20, 20)).toEqual({ kind: 'unchanged' })
     expect(baselineChange('20', 20)).toEqual({ kind: 'unchanged' })
   })
-  it('below 5, blank, not a number or not whole is invalid with a message', () => {
-    for (const bad of [3, 4, 0, -2, '', 'abc', 7.5, NaN, null]) {
+  it('below 3, blank, not a number or not whole is invalid with a message', () => {
+    for (const bad of [2, 1, 0, -2, '', 'abc', 7.5, NaN, null]) {
       const r = baselineChange(bad, 20)
       expect(r.kind).toBe('invalid')
-      expect(r.message).toBe('Baseline builds must be a whole number of at least 5.')
+      expect(r.message).toBe('Baseline builds must be a whole number of at least 3.')
     }
+  })
+})
+
+describe('isNarrowScreen', () => {
+  it('warns below the threshold only', () => {
+    expect(isNarrowScreen(375)).toBe(true)
+    expect(isNarrowScreen(NARROW_SCREEN_PX - 1)).toBe(true)
+    expect(isNarrowScreen(NARROW_SCREEN_PX)).toBe(false)
+    expect(isNarrowScreen(1280)).toBe(false)
+    expect(isNarrowScreen(0)).toBe(false)
+    expect(isNarrowScreen(undefined)).toBe(false)
+  })
+})
+
+describe('rulesBroken', () => {
+  it('lists each broken rule once with its builds, in rule order', () => {
+    const ids = ['B-1', 'B-2', 'B-3', 'B-4']
+    expect(rulesBroken([[], [5, 1], [], [1]], ids)).toEqual([
+      { rule: 1, builds: ['B-2', 'B-4'] },
+      { rule: 5, builds: ['B-2'] },
+    ])
+  })
+  it('gives an empty list when nothing is broken', () => {
+    expect(rulesBroken([[], [], null], ['B-1', 'B-2', 'B-3'])).toEqual([])
   })
 })

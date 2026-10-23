@@ -217,10 +217,18 @@ def test_imr_degenerate():
 
 
 def test_disposition_order():
-    # build 0: rule fired (even though also out of spec) -> QUARANTINE
-    # build 1: no rule, a coupon out of spec -> RETEST ; build 2: clean -> RELEASE
-    out = disposition([["uts X-bar rule 1"], [], []], [True, True, False])
-    assert out == ["QUARANTINE", "RETEST", "RELEASE"]
+    # build 0: a rule fired -> QUARANTINE ; builds 1 and 2: no rule -> RELEASE
+    out = disposition([["uts X-bar rule 1"], [], []])
+    assert out == ["QUARANTINE", "RELEASE", "RELEASE"]
+
+
+def test_out_of_spec_coupon_without_a_rule_is_release():
+    # A tight LSL puts coupons below the limit, but no control-chart rule fires: still RELEASE.
+    df = pd.read_csv(ROOT / "data" / "capable_baseline.csv")
+    result = analyze(df, specs={"uts_MPa": {"lsl": 965}})
+    assert {b["disposition"] for b in result["builds"]} == {"RELEASE"}
+    assert all(set(b) == BUILD_KEYS for b in result["builds"])
+    assert result["process_capable"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +329,7 @@ def test_rank_parameters_skips_constant_parameter():
 from pathlib import Path  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+BUILD_KEYS = {"build_id", "timestamp", "disposition", "rules_broken", "investigate_first"}  # the fields of one build
 MINIMAL = ["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]
 PARAM_NAMES = list(PARAMS)
 

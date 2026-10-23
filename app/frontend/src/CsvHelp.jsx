@@ -28,9 +28,8 @@ export default function CsvHelp({ open, onOpenChange }) {
           <ColumnList names={OPTIONAL_COLUMNS} />
           <p>{TEXT.csvOther}<code> 2026-01-05T08:00:00</code>.</p>
           <p className="csv-links">
-            <a href="./aeroprint_template.csv" download>Download template</a>
-            <a href="./aeroprint_template_with_parameters.csv" download>Template with parameters</a>
-            <a href={GUIDE_URL} target="_blank" rel="noreferrer">Full guide</a>
+            <a href="./aeroprint_template.csv" download>Download template (Required columns only)</a>
+            <a href="./aeroprint_template_with_parameters.csv" download>Download template (All parameters)</a>
           </p>
         </Dialog>
       )}

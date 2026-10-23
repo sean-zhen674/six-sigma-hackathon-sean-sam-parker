@@ -136,14 +136,14 @@ export function capabilityRow(cap, indexKey, threshold = 1.33) {
 
 /** Friendly names for build parameters (the API sends the column name). */
 export const PARAM_NAMES = {
-  chamber_oxygen_ppm: 'chamber oxygen (parts per million)',
-  laser_power_W: 'laser power (watts)',
-  scan_speed_mm_s: 'scan speed (millimeters per second)',
-  layer_thickness_um: 'layer thickness (micrometers)',
-  humidity_pct: 'humidity (percent)',
-  powder_bed_temp_C: 'powder bed temperature (degrees Celsius)',
-  build_plate_temp_C: 'build plate temperature (degrees Celsius)',
-  stress_relief_temp_C: 'stress relief temperature (degrees Celsius)',
+  chamber_oxygen_ppm: 'chamber oxygen (ppm)',
+  laser_power_W: 'laser power (W)',
+  scan_speed_mm_s: 'scan speed (mm/s)',
+  layer_thickness_um: 'layer thickness (µm)',
+  humidity_pct: 'humidity (%)',
+  powder_bed_temp_C: 'powder bed temperature (°C)',
+  build_plate_temp_C: 'build plate temperature (°C)',
+  stress_relief_temp_C: 'stress relief temperature (°C)',
 }
 
 export function friendlyParam(name) {
@@ -172,17 +172,12 @@ export function summarySentence(result) {
   const builds = result.builds || []
   const total = builds.length
   const quarantined = builds.filter((b) => b.disposition === 'QUARANTINE').length
-  const retest = builds.filter((b) => b.disposition === 'RETEST').length
   const first = result.first_out_of_control_build
-  const retestText = retest === 1
-    ? '1 build has a coupon outside the specification and should be retested.'
-    : `${retest} builds have a coupon outside the specification and should be retested.`
 
   if (first) {
     let head = `From build ${first} the process went out of control`
     if (quarantined > 0) {
       head += `; ${plural(quarantined, 'build', 'builds')} should be quarantined`
-      if (retest > 0) head += ` and ${plural(retest, 'build', 'builds')} retested`
     }
     head += '.'
     const flagged = builds.find((b) => b.build_id === first) || builds.find((b) => b.disposition === 'QUARANTINE')
@@ -193,15 +188,13 @@ export function summarySentence(result) {
     return `${head} ${cause}`
   }
   if (result.process_capable) {
-    if (retest > 0) return `The process is in control and capable. ${capital(retestText)}`
     return `All ${total} builds are in control and capable. Every build can be released.`
   }
   // In control, but not capable (an index is below the minimum, or an index is missing).
   const below = belowMinimum(result)
-  const lead = below.length > 0
+  return below.length > 0
     ? `No build broke a rule, but ${below.join(' and ')} ${below.length === 1 ? 'is' : 'are'} below the minimum of ${fmt(result.settings.capable_min_index, 2)}, so the process is not shown to be capable.`
     : 'No build broke a rule, but the process is not shown to be capable of the specification.'
-  return retest > 0 ? `${lead} ${capital(retestText)}` : lead
 }
 
 /**
@@ -273,7 +266,13 @@ export function analysisQuery(baselineN, specs) {
 
 /** Baseline builds: the starting value and the smallest the analysis service accepts. */
 export const DEFAULT_BASELINE = 20
-export const BASELINE_MIN = 5
+export const BASELINE_MIN = 3
+
+/** Below this window width (in pixels) the charts get too small to read comfortably. */
+export const NARROW_SCREEN_PX = 500
+export function isNarrowScreen(width) {
+  return Number.isFinite(width) && width > 0 && width < NARROW_SCREEN_PX
+}
 
 /**
  * What to do with the Baseline builds box (Enter, leaving the box and the Update charts button all ask this).
@@ -292,10 +291,10 @@ export function baselineChange(raw, applied) {
 
 /** One line of help under each chart title. The same component shows all of them. */
 export const CHART_HELP = {
-  xbar: "Build average chart: The average of each build's 5 coupons. Red diamonds are builds that look different from the baseline builds.",
-  r: 'Spread chart: How spread out the 5 coupons are inside one build (the largest value minus the smallest).',
-  i: 'Single value chart: One value per build.',
-  mr: 'Change-from-previous-build chart: How much the value changed from one build to the next (the moving range).',
+  xbar: "The average of each build's 5 coupons.",
+  r: 'How spread out the 5 coupons are inside one build.',
+  i: 'One value per build.',
+  mr: 'How much the value changed from one build to the next.',
 }
 
 /** True when the API gave a number for this index but marked it not reliable. */
@@ -304,7 +303,7 @@ export function isUnreliable(cap, indexKey) {
   return value !== null && value !== undefined && cap.reliable === false
 }
 
-export const UNRELIABLE_TEXT = 'Chart out of control: Do not rely on this number'
+export const UNRELIABLE_TEXT = 'Chart out of control'
 
 // ---- H-10: friendlier upload errors and the CSV format panel ----
 // Still no statistics: these map the API's 422 texts to plain advice.
@@ -380,4 +379,19 @@ export function explainUploadError(detail) {
     return 'A control chart needs at least 2 builds (20 or more is best). Add more builds to the file.'
   }
   return null
+}
+
+/**
+ * Which rules were broken on one chart, and on which builds: [{ rule, builds }] sorted by rule number.
+ * `rules` is the per-point list of rule numbers (as the API sends them); `buildIds` names the points.
+ */
+export function rulesBroken(rules, buildIds) {
+  const byRule = new Map()
+  rules.forEach((list, i) => {
+    ;(list || []).forEach((r) => {
+      if (!byRule.has(r)) byRule.set(r, [])
+      byRule.get(r).push(buildIds[i])
+    })
+  })
+  return [...byRule.entries()].sort((a, b) => a[0] - b[0]).map(([rule, builds]) => ({ rule, builds }))
 }

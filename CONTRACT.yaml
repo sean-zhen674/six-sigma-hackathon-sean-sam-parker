@@ -264,3 +264,20 @@ tasks:
       regenerated with Python 3.12; the banner shows a clear message for below 1.33 and no
       'Not reliable (Chart out of control)' line; screenshots; stats review.
     result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical"
+
+  - id: H-15
+    title: Remove the RETEST disposition; the focus is whether the process is capable
+    points: "supports the working tool (25) and clear demonstration (10): one clear question, is the process capable"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-23 00:27"
+    owns: ["app/", "tests/", "docs/", "demo/", "SPEC.md", "README.md", "data/README.md"]
+    notes: >
+      Team request. A build is QUARANTINE if a rule was broken, otherwise RELEASE; the dashboard shows
+      RELEASE as NOT RELEASED when the process is not capable. The coupon-out-of-specification check
+      and the any_coupon_out_of_spec field are removed. Capability indices and process_capable do not change.
+    definition_of_done: >
+      pytest and npm test pass; no RETEST or any_coupon_out_of_spec anywhere in code, tests or docs;
+      all numbers on the three datasets unchanged (capability indices, first out-of-control build,
+      QUARANTINE builds); manifest regenerated with Python 3.12 and 7 files; stats review.
+    result: "Built and reviewed 2026-10-23 00:35: RETEST and any_coupon_out_of_spec removed from code, tests, docs and screenshots; disposition is QUARANTINE or RELEASE (NOT RELEASED shown when not capable); capability numbers unchanged on all three datasets; pytest 90 passed, npm test 112 passed, manifest 7 files, stats review PASS"

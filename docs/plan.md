@@ -9,7 +9,7 @@ process capable of the aerospace spec, since when not, and what should be done w
   Cp = (USL − LSL)/6σ̂, Cpk = min(USL − X̿, X̿ − LSL)/3σ̂ (dimensional). σ̂ = 0 gives None, never inf.
 - I-MR: CL = mean, σ̂ = MR̄/1.128, limits CL ± 3σ̂; MR UCL = 3.267·MR̄.
 - Nelson rules 1-8 on X-bar and I charts (zones at σ̂/√n or σ̂); R and MR charts use rule 1 only.
-- Disposition: QUARANTINE (rule broken on UTS/porosity X-bar or R) > RETEST (any coupon out of spec) > RELEASE.
+- Disposition: QUARANTINE (rule broken on UTS/porosity X-bar or R), otherwise RELEASE.
 - Investigate first: parameters out of control at that build, ranked by |x − CL|/σ̂.
 
 ## Tasks, in order

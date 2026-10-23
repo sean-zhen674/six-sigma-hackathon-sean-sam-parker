@@ -23,7 +23,7 @@ The examples after each `FILL IN` show the shape of an answer. They are not hint
   porosity testing. The additive manufacturing process engineer uses the same screen to see which
   print parameter drifted.
 - **Decision the tool helps them make, and when:** when a build's coupon results arrive, before parts
-  ship: release the build, retest it, or quarantine it, and whether the printing process is still
+  ship: release the build or quarantine it, and whether the printing process is still
   capable of meeting the client's strength and porosity specs (and from which build it stopped being
   capable). For a flagged build, which parameter to investigate first (chamber oxygen, laser power, ...).
 - **Why this matches the prompt:** it flags *when* (control charts, build by build) and *whether*
@@ -66,7 +66,7 @@ Say the method in words before any code exists. Load the `stats-first-steering` 
   **Process capable** = every charted quality characteristic is in control AND each index ≥ 1.33.
   If the chart is out of control, the index is printed but marked "not reliable".
   **Build disposition:** QUARANTINE if the build breaks a rule on the UTS or porosity X-bar/R chart;
-  RETEST if it is in control but any coupon is outside spec; otherwise RELEASE.
+  otherwise RELEASE.
   **Investigate first:** for a flagged build, list the build parameters whose I-MR chart breaks a rule
   at that build, ranked by |z| = |x − CL| / σ̂ (largest first).
 - **Why it fits the use case:** the 5 coupons per build are a natural rational subgroup, so X-bar/R
@@ -121,7 +121,7 @@ Fixed for every team:
     dimensional deviation (unitless; ≥ 1.33 = capable), plus the first build where it stopped being in control;
   - X-bar and R charts for UTS (MPa) and porosity (%), with rule-breaking builds in red;
   - I-MR charts for chamber oxygen (ppm) and laser power (W), plus any other print-parameter column in the file (a file without parameter columns shows none and says the cause is not ranked);
-  - a build table: build_id, RELEASE / RETEST / QUARANTINE, the rule broken, and "investigate first: <parameter>".
+  - a build table: build_id, RELEASE / QUARANTINE, the rule broken, and "investigate first: <parameter>".
   How to read this: "A red point means that build behaved differently from the baseline builds;
   an index of 1.33 or more means the process meets spec with margin, and only counts while the chart is in control."
   The same numbers come back as JSON from the API.

@@ -6,6 +6,7 @@ Method (SPEC.md section 4): one subgroup is the 5 coupons of one build.
   sigma_hat    = Rbar / d2     (within-build sigma; NOT the overall standard deviation)
   I-MR chart   CL = mean, sigma = MRbar / 1.128, limits CL +/- 3 sigma, MR UCL = 3.267 * MRbar
 Limits come from a baseline (the first `baseline_n` builds in time order).
+Disposition: a build is QUARANTINE if a rule fired on it, otherwise RELEASE; the capability decision is separate.
 Assumptions: coupons within a build are a rational subgroup, values are roughly normal,
 the baseline is in control, builds are independent and in time order.
 
@@ -292,24 +293,14 @@ def imr(values, baseline_n=20):
 # Disposition and parameter ranking
 # ---------------------------------------------------------------------------
 
-def disposition(rules_broken, any_out_of_spec):
+def disposition(rules_broken):
     """One verdict per build.
 
     rules_broken: per build, a list of rule descriptions on the UTS/porosity X-bar or R charts.
-    any_out_of_spec: per build, True if any coupon is outside a spec limit.
-    QUARANTINE if a rule fired; else RETEST if a coupon is out of spec; else RELEASE.
+    QUARANTINE if a rule fired; else RELEASE. Whether the process is capable is a separate decision
+    (process_capable in analyze).
     """
-    if len(rules_broken) != len(any_out_of_spec):
-        raise ValueError("rules_broken and any_out_of_spec must have the same length")
-    out = []
-    for rules, bad in zip(rules_broken, any_out_of_spec):
-        if len(rules) > 0:
-            out.append("QUARANTINE")
-        elif bad:
-            out.append("RETEST")
-        else:
-            out.append("RELEASE")
-    return out
+    return ["QUARANTINE" if len(rules) > 0 else "RELEASE" for rules in rules_broken]
 
 
 def rank_parameters(params_df, baseline_n=20):
@@ -549,24 +540,14 @@ def analyze(df, specs=None, baseline_n=20):
         if res["message"]:
             warnings.append(f"{name}: {res['message']}")
 
-    # Per-build out-of-spec check and table.
-    bad_coupon = pd.Series(False, index=data.index)
-    for col in QUALITY_COLUMNS:
-        s = specs[col]
-        if s["lsl"] is not None:
-            bad_coupon |= data[col] < s["lsl"]
-        if s["usl"] is not None:
-            bad_coupon |= data[col] > s["usl"]
-    bad_by_build = bad_coupon.groupby(data["build_id"], sort=False).any()
-    out_of_spec = [bool(bad_by_build[b]) for b in build_ids]
-    verdicts = disposition([quarantine_rules[i] for i in range(len(build_ids))], out_of_spec)
+    # Per-build table.
+    verdicts = disposition([quarantine_rules[i] for i in range(len(build_ids))])
     builds = []
     for i, b in enumerate(build_ids):
         builds.append({
             "build_id": b,
             "timestamp": timestamps[i],
             "disposition": verdicts[i],
-            "any_coupon_out_of_spec": out_of_spec[i],
             "rules_broken": rules_by_build[i],
             "investigate_first": ranked["ranking"].get(i, []) if rules_by_build[i] else [],
         })
