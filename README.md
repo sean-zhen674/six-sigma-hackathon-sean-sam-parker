@@ -35,7 +35,7 @@ numbers come back as JSON from the API.
 |---|---|---|---|---|---|---|---|
 | `capable_baseline` | YES | 4.81 | 3.70 | 1.79 | none | none | none |
 | `oxygen_drift` | NO | 4.64 (not reliable) | 3.51 (not reliable) | 1.42 (reliable) | B-1023 | B-1023 to B-1030 (8 builds) | chamber_oxygen_ppm (z = 9.4 at B-1023, 52.3 at B-1030) |
-| `laser_power_excursion` | NO | 5.04 (not reliable) | 3.54 (not reliable) | 1.68 (not reliable) | B-1024 | B-1024, B-1025, B-1026 | laser_power_W (z = -37.0, -39.5, -37.5) |
+| `marginal_spread` | NO | 4.81 (meets the minimum) | 3.70 (meets the minimum) | 1.19 (below the minimum: not capable) | none | none (all 30 RELEASE) | none |
 
 "Not reliable" means the chart is out of control, so the index is printed but does not count.
 The step-by-step walkthrough of all three datasets (with more screenshots, other spec limits and a
@@ -268,7 +268,7 @@ curl http://localhost:8000/analyze/oxygen_drift
 # JSON with keys: build_ids, charts, capability, process_capable, first_out_of_control_build, builds, warnings, settings
 # (process_capable false, first_out_of_control_build "B-1023")
 
-curl -F file=@data/laser_power_excursion.csv http://localhost:8000/analyze
+curl -F file=@data/marginal_spread.csv http://localhost:8000/analyze
 # same JSON shape for your own file
 
 curl -F file=@data/oxygen_drift.csv "http://localhost:8000/analyze?baseline_n=20&uts_lsl=990"

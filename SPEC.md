@@ -133,8 +133,8 @@ collect this data for real.
 - **Datasets:** seeded simulations, 30 builds × 5 coupons each:
   `capable_baseline.csv` (in control, Cpl and Cpu ≥ 1.33); `oxygen_drift.csv` (chamber oxygen creeps up
   from build 21, so UTS falls and porosity rises, flagged by rules 2/3 before parts fail spec);
-  `laser_power_excursion.csv` (laser power drops about 15 % on builds 24-26, so porosity spikes,
-  flagged by rule 1). The seed and generator script are recorded in `data/README.md`.
+  `marginal_spread.csv` (in control on every build, but the dimensional spread is wide, so Cpk is
+  about 1.19, below 1.33: not capable). The seed and generator script are recorded in `data/README.md`.
 
 ## 8. Documentation and reproducibility (rubric: docs 10, public repo 5)
 - `README.md` says what the tool does, for whom, every input and parameter, how to run it in one

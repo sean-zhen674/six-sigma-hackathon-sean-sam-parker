@@ -22,7 +22,6 @@ export const COLUMN_MEANINGS = {
 export const DATASET_TEXT = {
   capable_baseline: 'Capable Baseline: A healthy process in control, every capability index at least 1.33, so every build should be released.',
   oxygen_drift: 'Oxygen Drift: Chamber oxygen creeps up from build 21; look for tensile strength falling and porosity rising.',
-  laser_power_excursion: 'Laser Power Excursion: Laser power dips about 15 percent on builds 24 to 26; look for a porosity spike, then recovery.',
   marginal_spread: 'Marginal Spread: In control on every build, but the parts vary too much in size, so the dimensional deviation capability index is below 1.33 and the process is not capable.',
 }
 

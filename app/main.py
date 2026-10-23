@@ -43,7 +43,6 @@ DATA_DIR = _find_data_dir()
 DATASET_DESCRIPTIONS = {
     "capable_baseline": "Capable baseline: a healthy process in control, every index at least 1.33, so every build should be released.",
     "oxygen_drift": "Oxygen drift: chamber oxygen creeps up from build 21; look for UTS falling and porosity rising.",
-    "laser_power_excursion": "Laser power excursion: laser power dips about 15 % on builds 24-26; look for a porosity spike, then recovery.",
     "marginal_spread": "Marginal spread: in control on every build, but the dimensional deviation varies too much, so its index is below 1.33 and the process is not capable.",
 }
 

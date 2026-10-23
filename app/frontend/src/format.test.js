@@ -228,7 +228,6 @@ describe('datasetLabel', () => {
   it('drops underscores and capitalises every word', () => {
     expect(datasetLabel('capable_baseline')).toBe('Capable Baseline')
     expect(datasetLabel('oxygen_drift')).toBe('Oxygen Drift')
-    expect(datasetLabel('laser_power_excursion')).toBe('Laser Power Excursion')
     expect(datasetLabel('marginal_spread')).toBe('Marginal Spread')
   })
   it('handles empty input', () => {

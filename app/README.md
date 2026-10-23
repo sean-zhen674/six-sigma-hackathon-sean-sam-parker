@@ -31,7 +31,7 @@ bash app/testme.sh        # API on http://localhost:8000, docs at /docs
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/analyze/oxygen_drift
-curl -F file=@data/laser_power_excursion.csv http://localhost:8000/analyze
+curl -F file=@data/marginal_spread.csv http://localhost:8000/analyze
 curl -F file=@data/oxygen_drift.csv "http://localhost:8000/analyze?baseline_n=20&uts_lsl=920&porosity_usl=0.4"
 curl "http://localhost:8000/analyze/oxygen_drift?uts_lsl=990"   # same answer as POSTing the file with uts_lsl=990 (UTS Cpl -1.04)
 ```

@@ -19,7 +19,6 @@ SEED = 5300  # base seed; each scenario uses SEED + k
 SCENARIO_SEEDS = {
     "capable_baseline": SEED + 36,        # 5336
     "oxygen_drift": SEED + 22,            # 5322
-    "laser_power_excursion": SEED + 18,   # 5318
     "marginal_spread": SEED + 36,         # 5336, the same stream as capable_baseline
 }
 # Within-build sd of the dimensional deviation (mm). 0.02 for every scenario except
@@ -63,9 +62,6 @@ def build_parameters(rng, scenario):
         # Builds 21..30 (index 20..29): oxygen creeps up linearly to about 430 ppm.
         creep = np.linspace(0, 1, 10)
         p.loc[20:, "chamber_oxygen_ppm"] = 100 + 330 * creep + rng.normal(0, 8, 10)
-    if scenario == "laser_power_excursion":
-        # Builds 24, 25, 26 (index 23..25): laser power drops about 15 %.
-        p.loc[23:25, "laser_power_W"] = 238 + rng.normal(0, 1.5, 3)
     return p
 
 

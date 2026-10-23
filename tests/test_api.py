@@ -35,11 +35,11 @@ def test_root_links_to_docs():
     assert body["docs"] == "/docs"
 
 
-def test_datasets_lists_four():
+def test_datasets_lists_three():
     r = client.get("/datasets")
     assert r.status_code == 200
     names = [d["name"] for d in r.json()["datasets"]]
-    assert sorted(names) == ["capable_baseline", "laser_power_excursion", "marginal_spread", "oxygen_drift"]
+    assert sorted(names) == ["capable_baseline", "marginal_spread", "oxygen_drift"]
     assert all(d["description"] for d in r.json()["datasets"])
 
 
@@ -79,12 +79,6 @@ def test_oxygen_drift_points_at_oxygen():
     assert body["first_out_of_control_build"] == "B-1023"
     build = next(b for b in body["builds"] if b["build_id"] == "B-1023")
     assert build["investigate_first"][0]["parameter"] == "chamber_oxygen_ppm"
-
-
-def test_laser_power_excursion_points_at_laser_power():
-    body = client.get("/analyze/laser_power_excursion").json()
-    build = next(b for b in body["builds"] if b["build_id"] == "B-1024")
-    assert build["investigate_first"][0]["parameter"] == "laser_power_W"
 
 
 def test_unknown_dataset_is_404_with_message():
@@ -194,7 +188,7 @@ def test_imports_work_inside_a_bundle(tmp_path):
         "from fastapi.testclient import TestClient\n"
         "c = TestClient(main.app)\n"
         "assert main.analyze.__module__ == 'qc', main.analyze.__module__\n"
-        "assert len(c.get('/datasets').json()['datasets']) == 4\n"
+        "assert len(c.get('/datasets').json()['datasets']) == 3\n"
         "assert c.get('/analyze/capable_baseline').json()['process_capable'] is True\n"
         "print('bundle ok')\n"
     )
@@ -215,9 +209,9 @@ def test_get_with_uts_lsl_equals_post_with_uts_lsl():
 
 
 def test_get_with_all_spec_parameters_equals_post():
-    content = (DATA / "laser_power_excursion.csv").read_bytes()
+    content = (DATA / "marginal_spread.csv").read_bytes()
     params = {"baseline_n": 15, "uts_lsl": 920, "porosity_usl": 0.4, "dim_lsl": -0.2, "dim_usl": 0.2}
-    assert client.get("/analyze/laser_power_excursion", params=params).json() == post_csv(content, **params).json()
+    assert client.get("/analyze/marginal_spread", params=params).json() == post_csv(content, **params).json()
 
 
 def test_get_without_spec_parameters_keeps_the_defaults():

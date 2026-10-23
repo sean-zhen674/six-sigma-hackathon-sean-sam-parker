@@ -21,7 +21,7 @@ process capable of the aerospace spec, since when not, and what should be done w
    One planted series per Nelson rule (1-8) flags on the exact point; a clean series flags nothing.
    Degenerate: constant coupons → Cp/Cpk None + message; 1 coupon per build or < 2 builds → ValueError.
 3. **H-02 data** (owns data/), 1 h, in parallel with H-03. `data/generate.py` (seed 5300) writes
-   capable_baseline.csv, oxygen_drift.csv, laser_power_excursion.csv (30 builds × 5 coupons) and
+   capable_baseline.csv, oxygen_drift.csv, marginal_spread.csv (30 builds × 5 coupons) and
    `data/README.md` codebook. Test: ls shows 3 CSVs; the codebook covers every column with units.
 4. **H-04 API** (owns app/), 1.5 h. Copy demos/fastapi → app/. Routes: GET `/health`, GET `/datasets`,
    GET `/analyze/{dataset}`, POST `/analyze` (CSV upload). Test: testme in the background, curl

@@ -90,10 +90,8 @@ describe('dataset text and spec tags', () => {
   it('uses plain descriptions for the bundled datasets and the API text otherwise', () => {
     expect(datasetText('capable_baseline', 'x')).toMatch(/^Capable Baseline: /)
     expect(datasetText('oxygen_drift', 'x')).toMatch(/^Oxygen Drift: /)
-    expect(datasetText('laser_power_excursion', 'x')).toMatch(/^Laser Power Excursion: /)
     expect(datasetText('marginal_spread', 'x')).toMatch(/^Marginal Spread: /)
     expect(datasetText('oxygen_drift', 'api text')).toContain('Chamber oxygen')
-    expect(datasetText('laser_power_excursion', 'x')).toContain('15 percent')
     expect(datasetText('new_one', 'api text')).toBe('api text')
     expect(datasetText('new_one', undefined)).toBe('')
   })

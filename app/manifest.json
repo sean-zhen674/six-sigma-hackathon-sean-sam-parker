@@ -28,9 +28,6 @@
     "data/capable_baseline.csv": {
       "checksum": "f87036e395247a66604a761b4cd8bebb"
     },
-    "data/laser_power_excursion.csv": {
-      "checksum": "3b7e22368019ea3caf62bb9018337927"
-    },
     "data/marginal_spread.csv": {
       "checksum": "8ad2ce3907147580d007bb73e089fcc7"
     },
@@ -38,7 +35,7 @@
       "checksum": "afda5c1df90dc825c6f4461e9cb2b6f3"
     },
     "main.py": {
-      "checksum": "e644cce54dd60485ca900d07663277be"
+      "checksum": "73dbb7b594188f780798d403c0b8b429"
     },
     "qc.py": {
       "checksum": "08beada13dc395991559c589cb97db55"
