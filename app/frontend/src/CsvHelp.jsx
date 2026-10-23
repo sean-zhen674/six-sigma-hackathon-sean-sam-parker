@@ -1,5 +1,5 @@
 import Dialog from './Dialog.jsx'
-import { COLUMN_MEANINGS, GUIDE_URL, OPTIONAL_COLUMNS, REQUIRED_COLUMNS } from './format.js'
+import { COLUMN_MEANINGS, OPTIONAL_COLUMNS, REQUIRED_COLUMNS } from './format.js'
 import { TEXT } from './labels.js'
 
 // Help for people who upload their own spreadsheet file (CSV): a small link-style button that opens a popup.

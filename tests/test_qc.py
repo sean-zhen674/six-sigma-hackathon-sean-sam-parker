@@ -597,3 +597,14 @@ def test_samples_and_templates_have_no_timestamp_tie_warning():
     for name in SAMPLES:
         result = analyze(pd.read_csv(ROOT / "data" / f"{name}.csv"))
         assert not any("share the same build_timestamp" in w for w in result["warnings"])
+
+
+def test_baseline_below_the_recommended_size_adds_one_warning_and_changes_nothing_else():
+    df = pd.read_csv(Path(__file__).resolve().parents[1] / "data" / "capable_baseline.csv")
+    few = analyze(df, baseline_n=9)
+    full = analyze(df, baseline_n=10)
+    expected = ("few baseline builds (9): the control limits are rough, so the rules can raise false alarms; "
+                "use at least 10 builds when you can (20 or more is best)")
+    assert expected in few["warnings"]
+    assert not any("few baseline builds" in w for w in full["warnings"])
+    assert few["settings"]["baseline_n_used"] == 9

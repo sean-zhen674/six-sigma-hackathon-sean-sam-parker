@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { makeScale, xPosition, extent, specVisible, chartDomain } from './scale.js'
+import { makeScale, xPosition, extent, chartDomain } from './scale.js'
 
 describe('makeScale', () => {
   it('maps the domain ends to the range ends (y axis is flipped)', () => {
@@ -32,22 +32,17 @@ describe('known point position', () => {
   })
 })
 
-describe('domain and spec visibility', () => {
+describe('extent and chart domain', () => {
   it('extent ignores null', () => {
     expect(extent([null, 3, 1, 2])).toEqual([1, 3])
     expect(extent([null])).toBeNull()
   })
-  it('a spec far from the data is left out, a near one is kept', () => {
-    const domain = [960, 985] // span 25
-    expect(specVisible(900, domain)).toBe(false)
-    expect(specVisible(950, domain)).toBe(true)
-    expect(specVisible(null, domain)).toBe(false)
+  it('chartDomain covers the points and the limits, plus 8 % padding', () => {
+    const [lo, hi] = chartDomain([0.2, 0.22], [0.17, 0.24])
+    expect(lo).toBeCloseTo(0.17 - 0.07 * 0.08, 10)
+    expect(hi).toBeCloseTo(0.24 + 0.07 * 0.08, 10)
   })
-  it('chartDomain includes visible specs only', () => {
-    const near = chartDomain([0.2, 0.22], [0.17, 0.24], [0.28, 0.5])
-    const far = chartDomain([970, 980], [966, 984], [900])
-    expect(near[1]).toBeGreaterThan(0.28)
-    expect(near[1]).toBeLessThan(0.5)
-    expect(far[0]).toBeGreaterThan(900)
+  it('chartDomain with nothing to draw is [0, 1]', () => {
+    expect(chartDomain([null], [])).toEqual([0, 1])
   })
 })

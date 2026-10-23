@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  explainRule, RULE_PHRASES, ruleTip, chartTitle, plainNote, datasetText, specTag,
+  explainRule, RULE_PHRASES, ruleTip, chartTitle, plainNote, datasetText,
 } from './format.js'
 import { spreadLabels } from './scale.js'
 
@@ -86,7 +86,7 @@ describe('plainNote (API notes -> words)', () => {
   })
 })
 
-describe('dataset text and spec tags', () => {
+describe('dataset text', () => {
   it('uses plain descriptions for the bundled datasets and the API text otherwise', () => {
     expect(datasetText('capable_baseline', 'x')).toMatch(/^Capable Baseline: /)
     expect(datasetText('oxygen_drift', 'x')).toMatch(/^Oxygen Drift: /)
@@ -94,11 +94,6 @@ describe('dataset text and spec tags', () => {
     expect(datasetText('oxygen_drift', 'api text')).toContain('Chamber oxygen')
     expect(datasetText('new_one', 'api text')).toBe('api text')
     expect(datasetText('new_one', undefined)).toBe('')
-  })
-  it('short in-chart tags for the two allowed-value lines', () => {
-    expect(specTag('Lowest allowed value')).toBe('Lowest allowed')
-    expect(specTag('Highest allowed value')).toBe('Highest allowed')
-    expect(specTag('other')).toBe('other')
   })
 })
 
@@ -170,6 +165,8 @@ describe('capital letter after a colon in the displayed text', () => {
   const add = (v) => { if (typeof v === 'string') shown.push(v); else if (Array.isArray(v)) v.forEach(add); else if (v && typeof v === 'object') Object.values(v).forEach(add) }
   add(TEXT); add(QUALITY.map((q) => q.indexName)); add(LEGEND_RULES); add(CHART_HELP); add(UNRELIABLE_TEXT)
   add(DATASET_TEXT); add(COLUMN_MEANINGS); add(TOUR_STEPS)
+  // The legend joins a bold word, a colon and these sentences in App.jsx, so scan them as they render.
+  add(`QUARANTINE: ${TEXT.quarantine}`); add(`RELEASE: ${TEXT.release}`)
   for (const k of ['xbar', 'r', 'i', 'mr']) add(chartTitle(k, 'Tensile strength', 'MPa'))
   for (const r of ['uts X-bar rule 5', 'porosity R rule 1']) add(explainRule(r))
   for (const n of [
@@ -201,5 +198,12 @@ describe('capital letter after a colon in the displayed text', () => {
   it('never has a lowercase letter right after a colon and a space', () => {
     const bad = shown.filter((s) => /: [a-z]/.test(s.replace(/: [a-z]+_[A-Za-z_]+/g, ': COLUMN'))) // a column name such as uts_MPa keeps its spelling
     expect(bad).toEqual([])
+  })
+})
+
+describe('few baseline builds note', () => {
+  it('turns the API warning into plain words with a capital after each colon', () => {
+    expect(plainNote('few baseline builds (3): the control limits are rough, so the rules can raise false alarms; use at least 10 builds when you can (20 or more is best)'))
+      .toBe('Few baseline builds (3): The control limits are rough, so the rules can raise false alarms. Use at least 10 builds when you can (20 or more is best).')
   })
 })

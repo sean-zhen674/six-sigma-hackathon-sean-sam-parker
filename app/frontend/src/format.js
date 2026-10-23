@@ -64,12 +64,11 @@ export function listToPerPoint(indices, n) {
 }
 
 /** X-bar chart object from the API -> props for <ControlChart>. */
-export function xbarProps(chart, specs) {
+export function xbarProps(chart) {
   const x = chart.xbar
   return {
     values: x.points, cl: x.cl, ucl: x.ucl, lcl: x.lcl,
     rules: perPointRules(x.flags, x.points.length),
-    specs,
   }
 }
 
@@ -78,7 +77,6 @@ export function rProps(chart) {
   return {
     values: r.points, cl: r.cl, ucl: r.ucl, lcl: r.lcl,
     rules: listToPerPoint(r.flags, r.points.length),
-    specs: [],
   }
 }
 
@@ -86,7 +84,7 @@ export function rProps(chart) {
 export function iProps(p) {
   return {
     values: p.points, cl: p.cl, ucl: p.ucl, lcl: p.lcl,
-    rules: perPointRules(p.flags, p.points.length), specs: [],
+    rules: perPointRules(p.flags, p.points.length),
   }
 }
 
@@ -95,7 +93,7 @@ export function mrProps(p) {
   const values = [null, ...p.moving_ranges]
   return {
     values, cl: p.mr_bar, ucl: p.mr_ucl, lcl: 0,
-    rules: listToPerPoint(p.mr_flags, values.length), specs: [],
+    rules: listToPerPoint(p.mr_flags, values.length),
   }
 }
 
@@ -266,7 +264,14 @@ export function analysisQuery(baselineN, specs) {
 
 /** Baseline builds: the starting value and the smallest the analysis service accepts. */
 export const DEFAULT_BASELINE = 20
+/** Fewer baseline builds than this show the rough-limits caution. */
+export const BASELINE_CAUTION_BELOW = 10
 export const BASELINE_MIN = 3
+
+/** Show the rough-limits caution? `baselineNUsed` is result.settings.baseline_n_used: the number the API really used (never more than the file's builds), the same number its warning is based on. */
+export function showBaselineCaution(baselineNUsed) {
+  return typeof baselineNUsed === 'number' && baselineNUsed < BASELINE_CAUTION_BELOW
+}
 
 /** Below this window width (in pixels) the charts get too small to read comfortably. */
 export const NARROW_SCREEN_PX = 500
@@ -310,8 +315,6 @@ export const UNRELIABLE_TEXT = 'Chart out of control'
 
 /** The project's public repository (linked from the header). */
 export const REPO_URL = 'https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker'
-
-export const GUIDE_URL = 'https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker/blob/main/docs/csv-format.md'
 
 export const REQUIRED_COLUMNS = ['build_id', 'build_timestamp', 'uts_MPa', 'porosity_pct', 'dimensional_dev_mm']
 export const OPTIONAL_COLUMNS = [

@@ -3,7 +3,7 @@
 User: the supplier quality engineer releasing Ti-6Al-4V bracket builds. Question: is the print
 process capable of the aerospace spec, since when not, and what should be done with this build?
 
-## Statistics (formulas: SPEC.md section 4; n = 5 coupons per build, baseline = builds 1-20)
+## Statistics (formulas: SPEC.md section 4; n = 5 coupons per build, baseline = first 20 builds by default, adjustable, minimum 3)
 - X-bar chart: CL = X̿, limits X̿ ± A2·R̄ (A2 = 0.577). R chart: UCL = D4·R̄ (2.114), LCL = 0.
 - σ̂ = R̄ / d2 (2.326). Cpl = (X̿ − LSL)/3σ̂ (UTS); Cpu = (USL − X̿)/3σ̂ (porosity);
   Cp = (USL − LSL)/6σ̂, Cpk = min(USL − X̿, X̿ − LSL)/3σ̂ (dimensional). σ̂ = 0 gives None, never inf.
@@ -29,7 +29,7 @@ process capable of the aerospace spec, since when not, and what should be done w
 5. **H-06 deploy API** (owns .github/workflows/, .github/scripts/, app/manifest.json), 1 h, right
    after H-04. Repo already public (H-08, first half). Needs CONNECT_SERVER/CONNECT_API_KEY secrets.
 6. **H-05 dashboard + demo** (owns app/frontend/, demo/), 3 h. Copy demos/reactfront → app/frontend/;
-   Plotly.js charts; banner, 4 charts, build table; API URL in `src/config.js`. Then deploy it
+   hand-drawn SVG charts (not Plotly.js); banner, charts, build table; API URL in `src/config.js`. Then deploy it
    static (deploy-react-static.yml, H-06 files). demo/README.md walks all 3 datasets.
    Test: Playwright opens the page, reads the banner and Cpl, matches the API JSON.
 7. **H-07 README** (owns README.md, app/README.md), 1 h. Every input, endpoint, function, live URLs.
@@ -38,7 +38,7 @@ process capable of the aerospace spec, since when not, and what should be done w
 ## Decisions
 - Front end: React (Vite) in app/frontend/, separate static deploy; /docs is the fallback.
 - Data: one CSV per scenario, one row per coupon, build parameters repeated on each row.
-- Capable: every index ≥ 1.33 AND in control; limits from builds 1-20 only.
+- Capable: every index ≥ 1.33 AND in control; limits from the baseline builds only (default the first 20, adjustable, minimum 3; a note appears below 10).
 - Run rules: all 8 Nelson rules on X-bar and I charts; rule 1 only on R and MR charts (agent choice, stated in SPEC).
 
 ## Risks
@@ -49,7 +49,7 @@ process capable of the aerospace spec, since when not, and what should be done w
 4. Deploy key: without CONNECT_SERVER/CONNECT_API_KEY, H-06 is blocked. Get them early.
 
 ## H-09 decisions (dashboard usability pass, asked 2026-10-22)
-- Layout: keep the current order (banner, charts, parameters, table, legend).
+- Layout: keep the then-current order (banner, charts, parameters, table, legend). Replaced by the order under "H-16 current state" below.
 - Banner: unreliable indices are greyed out with a warning and "do not rely on this".
 - Explain: one plain-English summary sentence under the banner (wording only, from API fields), a one-line help text under each chart, a dismissible first-visit tour, dataset descriptions in the picker.
 - Spec limits: editable on every dataset (GET /analyze/{dataset} accepts the same spec params as POST /analyze).
@@ -67,15 +67,42 @@ process capable of the aerospace spec, since when not, and what should be done w
 ## H-12 decisions (controls panel redesign, asked 2026-10-22)
 - Header: remove the subtitle sentence; add a GitHub repository link; keep "Take the tour".
 - Box 1 "dataset": label "Select an example dataset" (dropdown shows Title Case names without underscores), its description, then "Upload dataset" on its own line underneath.
-- Box 2 "settings", below box 1: baseline builds (with a small grey explanation), then Tensile Strength: Lowest Allowed (MPa); Porosity: Highest Allowed (%); Dimensional Deviation: Lowest Allowed (mm) and Highest Allowed (mm) on the same line; buttons on one line.
+- Box 2 "settings", below box 1 (later the Test Parameters box; baseline builds moved out in H-13): then Tensile Strength: Lowest Allowed (MPa); Porosity: Highest Allowed (%); Dimensional Deviation: Lowest Allowed (mm) and Highest Allowed (mm) on the same line; buttons on one line.
 - Units abbreviated in these labels at the team's request.
 
 ## Reminder (asked 2026-10-22)
 - When all dashboard work is done: UPDATE THE README (root README.md, then check app/README.md, demo/README.md, docs/csv-format.md, SPEC.md sections 3 and 6) before merging to main and before the final submission steps (H-08).
 
 ## H-13 decisions (layout round 2, asked 2026-10-22)
-- Dataset box and Parameters box side by side on wide screens, stacked on narrow ones.
-- Settings box title becomes "Parameters".
-- Baseline builds moves out of the Parameters box into the Control charts section (with its grey explanation); changing it re-runs the analysis.
+- Dataset box and Test Parameters box side by side from 900 px, stacked below that.
+- Settings box title becomes "Parameters" (renamed "Test Parameters" later).
+- Baseline builds moves out of the Test Parameters box into the Control Charts section (with its grey explanation); changing it re-runs the analysis.
 - The CSV format instructions move under the Upload dataset button and open as a popup window.
 - The dataset description loses its early line break (width cap removed).
+
+## H-14 decisions (capability wording and a not-capable example, asked 2026-10-22)
+- A capability index below 1.33 reads "Below the minimum of 1.33: Not capable"; the separate out-of-control reliability line is removed (an out-of-control chart still shows the warning on its index).
+- New example dataset marginal_spread: in control on every build, but dimensional Cpk is about 1.19, so the process is not capable. The three older CSVs and their numbers do not change.
+- The chart intro becomes short bullets. (Later the extra dataset was removed again: the event asks for 2 to 3 datasets, so there are three.)
+
+## H-15 decisions (one question: is the process capable? asked 2026-10-23)
+- The third disposition is removed, together with the coupon-out-of-specification check and its API field. A build is QUARANTINE if a rule was broken on the UTS or porosity X-bar or R chart, otherwise RELEASE.
+- When the process is not capable the dashboard greys the build table and shows RELEASE builds as NOT RELEASED (QUARANTINE stays QUARANTINE).
+- Capability indices and process_capable do not change.
+
+## Later polish decisions (2026-10-23)
+- Baseline builds: default 20, minimum 3 (page and API); below 10 builds a yellow note and an API warning say the limits are rough. The page note follows settings.baseline_n_used, the number the API really used.
+- Summary box: the one-sentence summary sits in its own Summary box under the banner.
+- Control Charts: one drop-down row per measure or parameter, each showing "Rule broken" or "No rule broken" even when closed.
+- Hover details: pointing at (or tapping) a point shows the build, the value with its unit and the rules it broke.
+- Unit symbols everywhere (MPa, %, mm, ppm, W, mm/s, µm, °C), not spelled-out units.
+- Moving range wording: "How much the value changed from one build to the next."
+- Headings: Test Parameters: Build Average and Spread Charts; Build Parameters: Single Value and Moving Range Charts (the user's choice).
+
+## H-16 current state (consistency pass, 2026-10-23)
+- Page order: Dataset and Test Parameters boxes side by side, the banner (Process Capable? Yes or No), Summary, Control Charts (Baseline builds input, quality charts, build parameter charts), the builds table, then "What the rules mean".
+- Charts are hand-drawn SVG (no Plotly.js). The allowed-value lines are not drawn on any chart; the dead code for them was removed.
+- Three datasets: capable_baseline, oxygen_drift, marginal_spread.
+- README files are rewritten last, after the team approves the dashboard.
+
+- Reminder (asked 2026-10-23): at the very end run ONE full consistency pass over all files (stale wording, thresholds, dead code, test names, docs against code, screenshots), then update the README files, then ask before H-08. Do not repeat the audit after every small change; it is expensive.

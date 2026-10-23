@@ -346,3 +346,17 @@ def test_shared_timestamps_are_a_warning_not_an_error_through_the_api():
     assert r.status_code == 200
     assert any("2 builds share the same build_timestamp (for example B-0001 and B-0002)" in w
                for w in r.json()["warnings"])
+
+
+# ---- few baseline builds: rough limits give a warning ----
+
+def test_few_baseline_builds_add_a_warning_and_the_default_does_not():
+    few = client.get("/analyze/capable_baseline", params={"baseline_n": 3}).json()
+    assert few["settings"]["baseline_n_used"] == 3
+    assert any("few baseline builds (3)" in w for w in few["warnings"])
+    for n in (10, 12, 20):  # 10 or more builds: no warning
+        full = client.get("/analyze/capable_baseline", params={"baseline_n": n}).json()
+        assert full["settings"]["baseline_n_used"] == n
+        assert not any("few baseline builds" in w for w in full["warnings"])
+    nine = client.get("/analyze/capable_baseline", params={"baseline_n": 9}).json()
+    assert any("few baseline builds (9)" in w for w in nine["warnings"])

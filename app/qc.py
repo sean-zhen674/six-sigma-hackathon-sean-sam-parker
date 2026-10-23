@@ -34,6 +34,7 @@ SUBGROUP_SIZE = 5
 IMR_D2 = 1.128
 MR_D4 = 3.267
 CAPABLE_MIN = 1.33  # an index at or above this is "capable"
+MIN_BASELINE_WARNING = 10  # fewer baseline builds than this give rough limits (the analysis adds a warning)
 
 RULE_NUMBERS = (1, 2, 3, 4, 5, 6, 7, 8)
 
@@ -552,6 +553,11 @@ def analyze(df, specs=None, baseline_n=20):
             "investigate_first": ranked["ranking"].get(i, []) if rules_by_build[i] else [],
         })
 
+    if n_base < MIN_BASELINE_WARNING:
+        warnings.append(
+            f"few baseline builds ({n_base}): the control limits are rough, so the rules can raise false alarms; "
+            f"use at least {MIN_BASELINE_WARNING} builds when you can (20 or more is best)"
+        )
     first_idx = min(first_bad) if first_bad else None
     if not all_in_control:
         warnings.append("a chart is out of control: capability indices are printed but not reliable")

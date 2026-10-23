@@ -17,19 +17,11 @@ export function extent(values) {
   return nums.length ? [Math.min(...nums), Math.max(...nums)] : null
 }
 
-/** Is a spec limit close enough to the data to draw? Within one data-span of either end. */
-export function specVisible(value, domain) {
-  if (typeof value !== 'number' || !domain) return false
-  const span = domain[1] - domain[0]
-  return value >= domain[0] - span && value <= domain[1] + span
-}
-
-/** y axis range: the points, the limits and any visible spec lines, plus 8 % padding. */
-export function chartDomain(values, limits, specValues = []) {
+/** y axis range: the points and the control limits, plus 8 % padding. */
+export function chartDomain(values, limits) {
   const base = extent([...values, ...limits])
   if (!base) return [0, 1]
-  const visible = specValues.filter((s) => specVisible(s, base))
-  const [lo, hi] = extent([...base, ...visible])
+  const [lo, hi] = base
   const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.05 || 1
   return [lo - pad, hi + pad]
 }

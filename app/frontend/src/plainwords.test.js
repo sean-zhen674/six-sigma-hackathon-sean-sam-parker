@@ -24,33 +24,18 @@ function containsWord(text, word) {
   return new RegExp(`(^|[^A-Za-z0-9_])${escaped}($|[^A-Za-z0-9_])`).test(text)
 }
 
-// H-12 (asked by the team): the four control labels abbreviate their units: (MPa), (%) and (mm).
-// Those two extra abbreviations, "mm" and "%", are allowed ONLY inside those four labels
-// (SPEC_FIELDS[].label). Everywhere else they are banned, even inside a parenthesis, so the
-// exception cannot spread. "MPa" keeps the old rule: only inside a parenthesis after the plain words
-// (so "megapascals (MPa)" is fine, and the four labels pass it too).
-// (Later, the team asked for every unit as its symbol: MPa, %, mm, ppm, W, mm/s, µm and °C are allowed everywhere.)
-const ONLY_IN_CONTROL_LABELS = []
+// The team asked for every unit as its symbol: MPa, %, mm, ppm, W, mm/s, µm and °C are allowed everywhere.
 const CONTROL_LABELS = SPEC_FIELDS.map((f) => f.label)
-// The two dimensional boxes also show the shorter visible form under their group heading.
-const CONTROL_TEXTS = [...CONTROL_LABELS, ...SPEC_FIELDS.map((f) => f.short).filter(Boolean)]
 
 /** A sentence that quotes the control labels (a validation message): check it with the labels cut out. */
 function withoutControlLabels(text) {
   return [...CONTROL_LABELS].sort((a, b) => b.length - a.length).reduce((t, l) => t.split(l).join('the box'), String(text))
 }
 
-function unitOffenders(text) {
-  const t = String(text)
-  return ONLY_IN_CONTROL_LABELS.filter((u) => (u === '%' ? t.includes('%') : containsWord(t, u)))
-}
-
 function offenders(text) {
   const t = String(text)
   const withoutParens = t.replace(/(?<=[A-Za-z])\s\([^)]*\)/g, ' ')
-  const found = [...PAREN_ONLY, ...NEVER].filter((w) => containsWord(withoutParens, w))
-  // The four control labels are the one place the unit abbreviations "mm" and "%" may appear.
-  return CONTROL_TEXTS.includes(t) ? found : [...found, ...unitOffenders(t)]
+  return [...PAREN_ONLY, ...NEVER].filter((w) => containsWord(withoutParens, w))
 }
 
 function flatten(value, out = []) {
@@ -62,7 +47,7 @@ function flatten(value, out = []) {
 
 describe('the guard itself', () => {
   it('allows a short form inside a parenthesis after plain words', () => {
-    expect(offenders('Tensile strength (UTS), in megapascals (MPa)')).toEqual([])
+    expect(offenders('Tensile strength (UTS), in units of pressure (MPa)')).toEqual([])
     expect(offenders('spreadsheet file (CSV)')).toEqual([])
     expect(offenders('lower specification limit (LSL)')).toEqual([])
   })
@@ -93,7 +78,7 @@ describe('the guard itself', () => {
 describe('visible-string constants use plain words', () => {
   const groups = {
     PARAM_NAMES, CHART_HELP, RULE_PHRASES, UNRELIABLE_TEXT, COLUMN_MEANINGS, DATASET_TEXT,
-    SPEC_LABELS: CONTROL_LABELS, // the guard lets exactly these four use (mm) and (%)
+    SPEC_LABELS: CONTROL_LABELS,
     SPEC_SHORT_LABELS: SPEC_FIELDS.map((f) => f.short ?? ''),
     DIM_GROUP: [DIM_GROUP],
     TOUR_STEPS, LEGEND_RULES, TEXT,
@@ -109,7 +94,7 @@ describe('visible-string constants use plain words', () => {
 
   it('chart titles, rule sentences, notes, upload hints and summaries have none', () => {
     const texts = []
-    for (const kind of ['xbar', 'r', 'i', 'mr']) texts.push(chartTitle(kind, 'Tensile strength', 'megapascals'))
+    for (const kind of ['xbar', 'r', 'i', 'mr']) texts.push(chartTitle(kind, 'Tensile strength', 'MPa'))
     for (const key of ['uts', 'porosity', 'dimensional']) {
       for (let k = 1; k <= 8; k++) texts.push(explainRule(`${key} X-bar rule ${k}`))
       texts.push(explainRule(`${key} R rule 1`))

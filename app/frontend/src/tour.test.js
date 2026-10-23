@@ -24,6 +24,9 @@ describe('tour flag', () => {
   it('has 4 steps', () => {
     expect(TOUR_STEPS).toHaveLength(4)
   })
+  it('the table step says builds show as NOT RELEASED when the process is not capable', () => {
+    expect(TOUR_STEPS[3].text).toContain('If the process is not capable, builds show as NOT RELEASED.')
+  })
   it('step 1 names the two controls by their current labels (H-12)', () => {
     expect(TOUR_STEPS[0].text).toBe(
       'Use "Select an example dataset" to pick a built-in example, or "Upload dataset" to analyze your own spreadsheet file (CSV), with one row per coupon and 5 coupons per build.')

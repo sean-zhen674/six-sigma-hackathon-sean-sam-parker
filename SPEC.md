@@ -41,12 +41,14 @@ cannot measure costs points.
 | ONE CSV, one row per coupon, exactly 5 coupons per build. **5 required columns:** `build_id`, `build_timestamp`, `uts_MPa`, `porosity_pct`, `dimensional_dev_mm` | text ID, ISO 8601 time; MPa, %, mm | the coupon test lab's report (LIMS export) and the build record |
 | **8 optional print-parameter columns** (the same value on all 5 coupon rows, or raw values that the tool averages per build): `laser_power_W`, `scan_speed_mm_s`, `layer_thickness_um`, `chamber_oxygen_ppm`, `humidity_pct`, `powder_bed_temp_C`, `build_plate_temp_C` (each the mean over the build's layer log), `stress_relief_temp_C` (post-process). Each one present gets an I-MR chart and joins "investigate first"; absent ones are skipped and named in `settings.parameters_missing` | W, mm/s, µm, ppm, %, °C | the printer's layer log averaged per build, and the heat-treat furnace record, joined on `build_id` |
 | Any other column (`coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes, ...) | anything | **ignored**: never read, so blanks or text in it cannot cause an error. The three sample files keep these as realistic extras |
+| Baseline builds (default 20, minimum 3; a note appears below 10 builds because the limits are then rough) | whole number of builds | the user's judgement of how many early builds were normal; the default works for most files |
 | Spec limits (defaults built in, user can edit) | UTS LSL 900 MPa (target 950); porosity USL 0.5 % (target 0.2); dimensional deviation ±0.10 mm | the client's purchase spec / drawing |
 
 ## 4. The statistics, and why (rubric: valid QC analysis 25)
 Say the method in words before any code exists. Load the `stats-first-steering` skill first.
 - **Method:** X-bar and R charts on coupon UTS and porosity. One subgroup = the 5 coupons from one
-  build (n = 5). Limits come from an in-control baseline (the first 20 builds, in time order) with
+  build (n = 5). Limits come from an in-control baseline (by default the first 20 builds, in time order; the Baseline builds input changes this: default 20,
+  minimum 3, and a note appears below 10 builds because the limits are then rough) with
   the n = 5 constants A2 = 0.577, D3 = 0, D4 = 2.114, d2 = 2.326:
   X-bar chart CL = X̿, limits X̿ ± A2·R̄; R chart CL = R̄, LCL = D3·R̄ = 0, UCL = D4·R̄.
   Capability uses the within-build sigma, σ̂ = R̄ / d2 (not the overall standard deviation, which
@@ -117,11 +119,13 @@ Fixed for every team:
 
 ## 6. Outputs
 - **What the user sees:** on one React dashboard page, after picking a test dataset or uploading a CSV:
-  - a banner "Process capable: YES / NO", with Cpl for UTS, Cpu for porosity and Cpk for
+  - a banner "Process Capable? Yes / No", with Cpl for UTS, Cpu for porosity and Cpk for
     dimensional deviation (unitless; ≥ 1.33 = capable), plus the first build where it stopped being in control;
   - X-bar and R charts for UTS (MPa) and porosity (%), with rule-breaking builds in red;
   - I-MR charts for chamber oxygen (ppm) and laser power (W), plus any other print-parameter column in the file (a file without parameter columns shows none and says the cause is not ranked);
   - a build table: build_id, RELEASE / QUARANTINE, the rule broken, and "investigate first: <parameter>".
+    When the process is not capable the table is greyed out and every build that would be RELEASE shows
+    as NOT RELEASED (QUARANTINE stays QUARANTINE).
   How to read this: "A red point means that build behaved differently from the baseline builds;
   an index of 1.33 or more means the process meets spec with margin, and only counts while the chart is in control."
   The same numbers come back as JSON from the API.

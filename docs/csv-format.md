@@ -59,7 +59,7 @@ measure). The tool skips it and tells you.
 
 Keep `coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes,
 or anything else if it is useful to you. The tool never reads them. A blank cell or text in an
-extra column causes no error. (The four sample files in `data/` contain such columns; that is why
+extra column causes no error. (The three sample files in `data/` contain such columns; that is why
 they have 19 columns.)
 
 ## 5. Formatting rules
@@ -95,8 +95,8 @@ Ten rows, two builds, five rows each. (Two builds are enough to run, but not eno
 
 ## 6. How to upload
 
-**Dashboard.** Open the dashboard, choose *Use my own CSV* and pick your file. Open the
-*CSV format* panel under the upload box for a reminder and the template downloads.
+**Dashboard.** Open the dashboard, pick your file with *Upload dataset*. The
+*How should my file be formatted?* button under it opens a popup with a reminder and the template downloads.
 You can change the spec limits in the boxes and press *Run again*.
 
 **curl** (the live API):
@@ -126,7 +126,8 @@ print(result["process_capable"], result["capability"]["uts_MPa"]["cpl"])
 - **Fewer than 20 builds:** all builds form the baseline, and the tool says so in its notes.
   The limits are then less reliable, and a problem inside those builds cannot show up as a flag
   against a clean baseline. The template in section 9 uses 3 builds only to check the arithmetic.
-- You can change the baseline size (minimum 5) in the dashboard or with `baseline_n`.
+- You can change the baseline size (minimum 3, default 20) in the *Baseline builds* box of the dashboard or with `baseline_n`.
+  Below 10 baseline builds the dashboard (and the API, in its notes) warns that the control limits are rough and the rules can raise false alarms; use at least 10 builds when you can.
 
 ## 8. How to change the spec limits
 
@@ -174,9 +175,9 @@ The numbers are still calculated, but which builds count as the baseline depends
 
 ## 11. What the results mean, in 3 lines
 
-1. **Process capable: YES** means every chart is in control and every index (Cpl, Cpu, Cpk) is at least 1.33.
+1. **Process Capable? Yes** means every chart is in control and every index (Cpl, Cpu, Cpk) is at least 1.33.
 2. **A red point** means that build behaved differently from the baseline builds; the table gives
-   RELEASE or QUARANTINE and, if you included print parameters, which one to investigate first.
+   RELEASE or QUARANTINE (builds show as NOT RELEASED while the process is not capable) and, if you included print parameters, which one to investigate first.
 3. An index only counts while its chart is in control; otherwise it is marked "not reliable".
 
 The full method, the formulas and the sample-data walkthrough are in the project [`README.md`](../README.md).

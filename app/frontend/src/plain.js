@@ -29,11 +29,6 @@ export function datasetText(name, apiText) {
   return DATASET_TEXT[name] || apiText || ''
 }
 
-/** The short tag drawn inside a chart for an allowed-value line. */
-export function specTag(label) {
-  return String(label).replace(/ value$/, '')
-}
-
 /** The eight Nelson rules in words (used in the table, the tooltips and the notes). */
 export const RULE_PHRASES = {
   1: 'one build beyond the control limits',
@@ -129,6 +124,8 @@ export function plainNote(text) {
   const raw = text === undefined || text === null ? '' : String(text)
   let m = /^Print-parameter columns not found \(skipped\): (.*)\.$/.exec(raw)
   if (m) return `These optional print-parameter columns were not found and were skipped: ${m[1]}.`
+  m = /^few baseline builds \((\d+)\): the control limits are rough, so the rules can raise false alarms; use at least (\d+) builds when you can \(20 or more is best\)$/.exec(raw)
+  if (m) return `Few baseline builds (${m[1]}): The control limits are rough, so the rules can raise false alarms. Use at least ${m[2]} builds when you can (20 or more is best).`
   if (/^No print-parameter columns found/.test(raw)) return 'No print-parameter columns were found, so the likely cause is not ranked.'
   if (raw === 'a chart is out of control: capability indices are printed but not reliable') {
     return 'A chart is out of control, so the capability indices are shown but are not reliable.'

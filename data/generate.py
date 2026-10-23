@@ -1,4 +1,4 @@
-"""Generate the four simulated AeroPrint test datasets (all data is invented).
+"""Generate the three simulated AeroPrint test datasets (all data is invented).
 
 Run from the repo root:   .venv/Scripts/python.exe data/generate.py
 Same seed -> identical CSVs on every machine.

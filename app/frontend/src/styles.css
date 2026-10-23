@@ -30,10 +30,10 @@ body {
 .repo-link { color: #fff; font-weight: 600; text-decoration: underline; }
 
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }
-h2 { font-size: 1.3rem; margin: 24px 0 8px; }
+h2, h3 { font-size: 1.3rem; margin: 24px 0 8px; } /* h3 = the two sub-headings inside Control Charts, same look as h2 */
 .muted { color: var(--muted); }
 
-/* H-13: two cards (Dataset, Parameters): side by side from 900 px, stacked (Dataset first) below that */
+/* H-13: two cards (Dataset, Test Parameters): side by side from 900 px, stacked (Dataset first) below that */
 .controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: stretch; }
 @media (min-width: 900px) {
   .controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -142,11 +142,8 @@ button.secondary:disabled { background: #f1f5f9; color: #64748b; border-color: #
 .tour-spacer { flex: 1; }
 
 /* H-10: CSV format panel, error hint, not-ranked note */
-.csv-help { margin: 12px 0; padding: 4px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
-.csv-help p { margin: 8px 0; }
 .col-list { display: block; list-style: none; margin: 4px 0 8px; padding: 0; }
 .col-list li { overflow-wrap: anywhere; margin: 2px 0; }
-.csv-help code { background: #eef2f7; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
 .csv-links { display: flex; flex-wrap: wrap; gap: 8px 20px; font-weight: 600; }
 .csv-links a { color: var(--accent); }
 .error .hint-text { margin: 0 0 6px; font-size: 1rem; }
@@ -190,3 +187,6 @@ button.link-button { align-self: flex-start; background: none; border: 0; paddin
 .table-wrap.greyed table { background: #f1f5f9; color: #566174; }
 .table-wrap.greyed th, .table-wrap.greyed td { border-color: #cbd5e1; }
 .badge.held { color: #475569; background: #e2e8f0; border-color: #64748b; border-style: dashed; }
+
+.baseline-caution { margin: 6px 0 0; padding: 6px 10px; background: var(--warn-bg); border: 1px solid #b54708; border-left-width: 6px; border-radius: 6px; color: var(--warn); font-weight: 600; }
+.section-title { font-size: 1.4rem; }

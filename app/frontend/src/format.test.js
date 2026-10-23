@@ -3,7 +3,7 @@ import {
   fmt, fmtTime, shortBuild, errorText, topSuspect, suspectText,
   perPointRules, listToPerPoint, capabilityRow, mrProps,
   friendlyParam, summarySentence, validateSpecs, analysisQuery, specDefaults, isUnreliable, CHART_HELP,
-  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, baselineChange, DEFAULT_BASELINE, BASELINE_MIN, rulesBroken, isNarrowScreen, NARROW_SCREEN_PX,
+  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, showBaselineCaution, baselineChange, DEFAULT_BASELINE, BASELINE_MIN, rulesBroken, isNarrowScreen, NARROW_SCREEN_PX,
 } from './format.js'
 import { TEXT } from './labels.js'
 
@@ -97,8 +97,8 @@ describe('capabilityRow', () => {
   })
 })
 
-describe('chartsIntro is a list of four short bullets', () => {
-  it('has four items, none of them one long paragraph', () => {
+describe('chartsIntro is a list of three short bullets', () => {
+  it('has three items, none of them one long paragraph', () => {
     expect(Array.isArray(TEXT.chartsIntro)).toBe(true)
     expect(TEXT.chartsIntro).toHaveLength(3)
     expect(TEXT.chartsIntro[0]).toBe('Blue shading: Baseline builds used to calculate the limits.')
@@ -385,5 +385,25 @@ describe('rulesBroken', () => {
   })
   it('gives an empty list when nothing is broken', () => {
     expect(rulesBroken([[], [], null], ['B-1', 'B-2', 'B-3'])).toEqual([])
+  })
+})
+
+describe('fewBaseline caution', () => {
+  it('explains rough limits and starts with a capital after the colon', () => {
+    expect(TEXT.fewBaseline).toMatch(/^Few baseline builds: The control limits are rough/)
+  })
+})
+
+describe('showBaselineCaution (driven by the baseline the API really used)', () => {
+  it('shows below 10 builds, including a file that has fewer builds than the request', () => {
+    expect(showBaselineCaution(3)).toBe(true)
+    expect(showBaselineCaution(9)).toBe(true)
+    expect(showBaselineCaution(6)).toBe(true) // asked for 20, but the file has only 6 builds: the API used 6
+  })
+  it('hides at 10 or more, and before any answer has arrived', () => {
+    expect(showBaselineCaution(10)).toBe(false)
+    expect(showBaselineCaution(20)).toBe(false)
+    expect(showBaselineCaution(null)).toBe(false)
+    expect(showBaselineCaution(undefined)).toBe(false)
   })
 })

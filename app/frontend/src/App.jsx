@@ -4,7 +4,7 @@ import ControlChart from './ControlChart.jsx'
 import CsvHelp from './CsvHelp.jsx'
 import Tour from './Tour.jsx'
 import {
-  BASELINE_MIN, DEFAULT_BASELINE, isNarrowScreen, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
+  BASELINE_MIN, DEFAULT_BASELINE, isNarrowScreen, showBaselineCaution, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
   iProps, mrProps, plainNote, rProps, specDefaults, suspectText, summarySentence, validateSpecs, xbarProps,
 } from './format.js'
 import { LEGEND_RULES, MAIN_PARAMS, PARAMS, QUALITY, TEXT } from './labels.js'
@@ -168,7 +168,7 @@ export default function App() {
 
       <main>
         {narrow && (<p className="narrow-warning" role="note"><span aria-hidden="true">⚠</span> {TEXT.narrowScreen}</p>)}
-        <form className="controls" onSubmit={onSubmit} aria-label="Data and parameters">
+        <form className="controls" onSubmit={onSubmit} aria-label="Dataset and test parameters">
           <section className="card" aria-labelledby="dataset-h">
             <h2 id="dataset-h" className="card-title">{TEXT.datasetHeading}</h2>
             <div className="field">
@@ -231,7 +231,7 @@ export default function App() {
 
         {result && <Summary result={result} />}
         <ChartsSection result={result}>
-          <BaselineControl value={baselineN} error={baselineError} loading={loading}
+          <BaselineControl value={baselineN} used={result ? result.settings.baseline_n_used : null} error={baselineError} loading={loading}
             onChange={(v) => { setBaselineN(v); setBaselineError(null) }} onApply={applyBaseline} />
         </ChartsSection>
         {result && <BuildTable builds={result.builds} capable={result.process_capable} hasParams={Object.keys(result.charts.imr).length > 0} />}
@@ -253,7 +253,7 @@ function ErrorBox({ message }) {
 }
 
 /** The "Baseline builds" box. It lives in the Control charts section and stays visible while loading and after an error. */
-function BaselineControl({ value, error, loading, onChange, onApply }) {
+function BaselineControl({ value, used, error, loading, onChange, onApply }) {
   return (
     <div className="baseline-control">
       <div className="field">
@@ -268,6 +268,7 @@ function BaselineControl({ value, error, loading, onChange, onApply }) {
         </div>
         <p id="baseline-desc" className="helper">{TEXT.baselineHelp}<br />{TEXT.baselineDefaults}</p>
         {error && <p className="error" role="alert" id="baseline-error">{error}</p>}
+        {showBaselineCaution(used) && <p className="baseline-caution" role="note"><span aria-hidden="true">⚠</span> {TEXT.fewBaseline}</p>}
       </div>
     </div>
   )
@@ -340,17 +341,17 @@ function ChartsSection({ result, children }) {
   const hasParams = paramNames.length > 0
   return (
     <section aria-labelledby="charts-h">
-      <h2 id="charts-h">Control charts</h2>
+      <h2 id="charts-h" className="section-title">Control Charts</h2>
       <ul className="charts-intro">{TEXT.chartsIntro.map((t) => <li key={t}>{t}</li>)}</ul>
       {children}
       {result && (
         <>
-        <h2>{TEXT.qualityHeading}</h2>
+        <h3>{TEXT.qualityHeading}</h3>
         {QUALITY.map((q) => (
           <QualityCharts key={q.key} q={q} result={result} baselineUsed={baselineUsed} />
         ))}
 
-        <h2>{TEXT.paramsHeading}</h2>
+        <h3>{TEXT.paramsHeading}</h3>
         {!hasParams && <p className="param-note">{TEXT.noParams}</p>}
         {paramNames.map((name, k) => (
           <ParamCharts key={name} name={name} p={result.charts.imr[name]} ids={result.build_ids} baselineUsed={baselineUsed} defaultOpen={k === 0} />
@@ -386,7 +387,7 @@ function ChartRow({ title, flagged, defaultOpen, children }) {
 function QualityCharts({ q, result, baselineUsed }) {
   const chart = result.charts[q.key]
   const ids = chart.build_ids
-  const xb = xbarProps(chart, []) // the allowed values are for single coupons, so they are not drawn on a chart of build averages
+  const xb = xbarProps(chart)
   const rr = rProps(chart)
   return (
     <ChartRow title={q.title} flagged={flaggedBuilds(xb, rr)} defaultOpen>

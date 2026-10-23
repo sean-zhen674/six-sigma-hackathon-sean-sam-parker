@@ -154,7 +154,7 @@ tasks:
       git clone of the public repo into an empty folder, then the app/
       testme script and the H-03 tests both pass with no extra steps; git
       grep -i "api_key" finds no real key; the Devpost entry links the repo.
-    result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical"
+    result: ""
 
   - id: H-09
     title: Dashboard usability pass (clearer verdict, plain-English summary, help text, guided tour, editable spec limits)
@@ -246,7 +246,7 @@ tasks:
       the analysis; the CSV format instructions open in a popup from a button under Upload dataset;
       the dataset description has no early line break; numbers unchanged on the three datasets; no
       horizontal scroll at 375 px; new screenshots.
-    result: "Built and browser-checked 2026-10-22 23:03: boxes side by side (stacked under 800 px), Parameters title, baseline builds in Control charts (baseline 10 on oxygen_drift gives first alarm B-1022), CSV format popup, capital after colon, grey text removed from Parameters; npm test 105 passed, pytest 89 passed, build OK, numbers unchanged"
+    result: "Built and browser-checked 2026-10-22 23:03: boxes side by side (stacked under 900 px), Parameters title, baseline builds in Control charts (baseline 10 on oxygen_drift gives first alarm B-1022), CSV format popup, capital after colon, grey text removed from Parameters; npm test 105 passed, pytest 89 passed, build OK, numbers unchanged"
 
   - id: H-14
     title: Capability index below 1.33 wording; remove the out-of-control reliability line; fourth example dataset that is in control but not capable
@@ -258,6 +258,7 @@ tasks:
     notes: >
       Team request. Statistics in app/qc.py do not change. A new dataset marginal_spread (in control, one index
       below 1.33) is added as a fourth example; the three existing datasets and their numbers must not change.
+      (Later: laser_power_excursion removed, 3 datasets and a 7-file manifest.)
     definition_of_done: >
       pytest and npm test pass; marginal_spread gives process capable No with no out-of-control build and an
       index below 1.33; the three existing datasets are byte-identical; the manifest lists 8 files and is
@@ -281,3 +282,20 @@ tasks:
       all numbers on the three datasets unchanged (capability indices, first out-of-control build,
       QUARANTINE builds); manifest regenerated with Python 3.12 and 7 files; stats review.
     result: "Built and reviewed 2026-10-23 00:35: RETEST and any_coupon_out_of_spec removed from code, tests, docs and screenshots; disposition is QUARANTINE or RELEASE (NOT RELEASED shown when not capable); capability numbers unchanged on all three datasets; pytest 90 passed, npm test 112 passed, manifest 7 files, stats review PASS"
+
+  - id: H-16
+    title: Consistency pass over code, tests and documents (README files wait until the team approves the dashboard)
+    points: "supports docs (10) and the working tool (25): one wording, one set of numbers everywhere"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-23 01:27"
+    owns: ["app/frontend/", "app/main.py", "data/generate.py", "docs/", "SPEC.md", "tests/", "CONTRACT.yaml"]
+    notes: >
+      Team request: run through all files for consistency, but do not update any README yet. Also records the
+      unrecorded dashboard edits since H-15: baseline minimum 3, caution below 10 builds (page and API),
+      Test Parameters title, Summary box, Control Charts heading, moving range wording, unit symbols.
+    definition_of_done: >
+      pytest and npm test pass; no stale wording in code, tests, SPEC.md, docs/ and CONTRACT.yaml;
+      dead code removed; the dashboard caution uses baseline_n_used like the API; README files untouched.
+    result: "Done and verified 2026-10-23 01:36: audit findings fixed (legend capitals, baseline caution driven by baseline_n_used, dead spec-line code removed, h3 sub-headings, stale comments and docs); no README touched; pytest 92 passed on both Pythons, npm test 116 passed, build OK, banner numbers unchanged on all three datasets"
+

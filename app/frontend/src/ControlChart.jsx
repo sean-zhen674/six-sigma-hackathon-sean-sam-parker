@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { chartDomain, makeScale, specVisible, extent, spreadLabels, xPosition } from './scale.js'
-import { CHART_HELP, fmt, rulesBroken, shortBuild, specTag } from './format.js'
+import { chartDomain, makeScale, spreadLabels, xPosition } from './scale.js'
+import { CHART_HELP, fmt, rulesBroken, shortBuild } from './format.js'
 import { rulePhrase } from './plain.js'
 
 /** The one-line plain description under a chart title. kind = 'xbar' | 'r' | 'i' | 'mr'. */
@@ -12,13 +12,12 @@ export function ChartHelp({ kind }) {
 // fired) is passed in from the API; this component only turns them into pixels.
 //
 // props:
-//   title, unit      text for the heading (it already names the unit) and for the hover text; unit is in words
-//   kind             'xbar' | 'r' | 'i' | 'mr': picks the one-line help text under the title
+//   title, unit      text for the heading (it already names the unit) and for the hover text; unit is the symbol (MPa, %, ppm, W, ...)
+//   kind            'xbar' | 'r' | 'i' | 'mr': picks the one-line help text under the title
 //   buildIds         x labels, one per point
 //   values           the plotted points (null = no point, used by the MR chart)
 //   cl, ucl, lcl     lines from the API
 //   rules            for each point, the list of rule numbers it broke ([] = none)
-//   specs            [{label, value}] spec lines (dashed); only drawn when near the data
 //   baselineN        how many first builds were used for the limits (shaded)
 //   digits           decimals for labels
 
@@ -30,7 +29,7 @@ const NOT_FLAGGED_COLOR = '#1d4ed8'
 const FLAGGED_COLOR = '#b42318'
 
 export default function ControlChart({
-  title, kind, unit, buildIds, values, cl, ucl, lcl, rules, specs = [], baselineN, digits = 2,
+  title, kind, unit, buildIds, values, cl, ucl, lcl, rules, baselineN, digits = 2,
 }) {
   const [hover, setHover] = useState(null) // index of the point being pointed at (hover, or tap on a phone)
   const n = values.length
@@ -40,13 +39,10 @@ export default function ControlChart({
   const bottom = H - M.bottom
 
   const limits = [cl, ucl, lcl]
-  const domain = chartDomain(values, limits, specs.map((s) => s.value))
+  const domain = chartDomain(values, limits)
   const y = makeScale(domain[0], domain[1], bottom, top)
   const x = (i) => xPosition(i, n, left, right)
   const step = n > 1 ? (right - left) / (n - 1) : 0
-
-  const dataDomain = extent([...values, ...limits])
-  const shownSpecs = specs.filter((s) => specVisible(s.value, dataDomain))
 
   const flaggedIds = buildIds.filter((_, i) => rules[i] && rules[i].length > 0)
 
@@ -62,11 +58,8 @@ export default function ControlChart({
     { tag: 'Center', full: 'Center line', value: cl, color: '#067647' },
     { tag: 'Lower', full: 'Lower control limit', value: lcl, color: FLAGGED_COLOR },
   ]
-  // Every label on the right edge: control lines are one text line, allowed-value lines are two.
-  const labels = [
-    ...lines.map((l) => ({ text: [`${l.tag} ${fmt(l.value, digits)}`], color: l.color, value: l.value, h: 17 })),
-    ...shownSpecs.map((s) => ({ text: [specTag(s.label), fmt(s.value, digits)], color: '#6d28d9', value: s.value, h: 32 })),
-  ]
+  // Every label on the right edge: one text line per control line.
+  const labels = lines.map((l) => ({ text: `${l.tag} ${fmt(l.value, digits)}`, color: l.color, value: l.value, h: 17 }))
   const labelY = spreadLabels(labels.map((l) => ({ y: y(l.value), h: l.h })), 2, bottom)
 
   const ticks = buildIds.map((id, i) => ({ id, i })).filter(({ i }) => i % 5 === 0 || i === n - 1)
@@ -105,14 +98,9 @@ export default function ControlChart({
           {lines.map((l) => (
             <line key={l.full} x1={left} y1={y(l.value)} x2={right} y2={y(l.value)} stroke={l.color} strokeWidth="1.5" />
           ))}
-          {shownSpecs.map((s) => (
-            <line key={s.label} x1={left} y1={y(s.value)} x2={right} y2={y(s.value)} stroke="#6d28d9" strokeWidth="1.5" strokeDasharray="6 4" />
-          ))}
           {labels.map((l, k) => (
             <text key={k} x={right + 6} fontSize="12" fill={l.color}>
-              {l.text.map((line, j) => (
-                <tspan key={j} x={right + 6} y={labelY[k] - (l.text.length - 1) * 7 + j * 14 + 4}>{line}</tspan>
-              ))}
+              <tspan x={right + 6} y={labelY[k] + 4}>{l.text}</tspan>
             </text>
           ))}
 
