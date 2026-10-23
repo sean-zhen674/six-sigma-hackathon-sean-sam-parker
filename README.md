@@ -20,7 +20,7 @@ help the contractor fix it.
 
 ## 2. Live URLs
 
-Dashboard: TODO-DASHBOARD-URL
+Dashboard: https://connect.systems-apps.com/content/a5702adb-d4c3-4cbc-8856-737753cfd9d2/
 API: https://connect.systems-apps.com/content/8ec33f65-f84a-4323-a51d-b2d9a70e08da  (interactive docs: https://connect.systems-apps.com/content/8ec33f65-f84a-4323-a51d-b2d9a70e08da/docs)
 
 ## 3. One-minute demo

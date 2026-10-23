@@ -105,7 +105,7 @@ tasks:
   - id: H-06
     title: Deploy to the course Posit Connect server
     points: "protects the 25 working-tool points - judges must be able to open it"
-    status: in_progress
+    status: done
     owner: "agent"
     started_at: "2026-10-22 21:26"
     owns: [".github/workflows/", ".github/scripts/", "app/manifest.json", "app/.python-version"]
@@ -120,12 +120,12 @@ tasks:
     definition_of_done: >
       The workflow run is green, and the public URL answers HTTP 200 from a
       logged-out browser and returns the H-03 numbers for one test dataset.
-    result: "PARTIAL: deploy-fastapi workflow, scripts, app/manifest.json (python 3.12, 7 files, checksums verified) and app/.python-version prepared; NOT YET DEPLOYED (needs CONNECT_SERVER + CONNECT_API_KEY secrets)"
+    result: "GitHub Actions green for API and dashboard; API https://connect.systems-apps.com/content/8ec33f65-f84a-4323-a51d-b2d9a70e08da and dashboard https://connect.systems-apps.com/content/a5702adb-d4c3-4cbc-8856-737753cfd9d2/ answer HTTP 200 logged-out; browser run on the live dashboard shows oxygen_drift first out-of-control B-1023, Cpl 4.635 matches local"
 
   - id: H-07
     title: README and function documentation
     points: "10 - Tool Documentation: excellent, easy-to-follow documentation"
-    status: in_progress
+    status: done
     owner: "agent"
     started_at: "2026-10-22 21:07"
     owns: ["README.md", "app/README.md"]
@@ -137,7 +137,7 @@ tasks:
       how each function or endpoint works, how to run it in one command, the
       live URL, and links demo/README.md. A teammate who did not write the
       code follows it from a fresh clone and it works.
-    result: "README.md and app/README.md written; fresh-copy install + 45 pytest + 19 npm tests + build pass on Python 3.15. MISSING: live URLs (README.md TODO-DASHBOARD-URL and TODO-API-URL) until H-06 deploys"
+    result: "README.md and app/README.md written with live URLs; fresh-copy install + 46 pytest + 19 npm tests + build pass; README links demo/README.md"
 
   - id: H-08
     title: Reproducible public repo, submitted on Devpost
