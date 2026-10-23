@@ -1,6 +1,7 @@
 // Pure display helpers. They format and reshape numbers that the API already computed.
 // Nothing in this file calculates a statistic.
 import { plainNote } from './plain.js'
+import { QUALITY } from './labels.js'
 
 // The plain-words helpers (H-11) live in plain.js and are re-exported here.
 export * from './plain.js'
@@ -98,16 +99,35 @@ export function mrProps(p) {
   }
 }
 
-/** One banner row: the index text and whether the API calls it reliable. */
-export function capabilityRow(cap, indexKey) {
+/**
+ * One banner row: the index text and the small line under it. Only words are chosen here; the API
+ * already decided reliable (chart in control) and capable (index at least the minimum).
+ *   chart out of control   -> no small line (the warning line says it)
+ *   in control, capable    -> 'Meets the minimum of 1.33'
+ *   in control, not capable-> 'Below the minimum of 1.33: Not capable'
+ * No index at all keeps the API's message.
+ */
+export function capabilityRow(cap, indexKey, threshold = 1.33) {
   const value = cap[indexKey]
+  const missing = value === null || value === undefined
+  const unreliable = isUnreliable(cap, indexKey)
+  const minimum = fmt(threshold, 2)
+  let status = 'none'
+  let statusText = null
+  if (!missing && !unreliable) {
+    status = cap.capable ? 'meets' : 'below'
+    statusText = cap.capable ? `Meets the minimum of ${minimum}` : `Below the minimum of ${minimum}: Not capable`
+  } else if (unreliable) {
+    status = 'unreliable'
+  }
   return {
     value,
     text: fmt(value, 2),
-    reliableLabel: cap.reliable ? 'reliable' : 'not reliable (chart out of control)',
-    message: value === null || value === undefined ? plainNote(cap.message) : null,
+    status,
+    statusText,
+    message: missing ? plainNote(cap.message) : null,
     capable: cap.capable,
-    unreliable: isUnreliable(cap, indexKey),
+    unreliable,
   }
 }
 
@@ -132,6 +152,16 @@ export function friendlyParam(name) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** Names of the measures whose index the API calls reliable but not capable (display only). */
+function belowMinimum(result) {
+  const cap = result.capability
+  if (!cap || !result.settings || result.settings.capable_min_index == null) return []
+  return QUALITY
+    .filter((q) => cap[q.key] && cap[q.key].reliable === true && cap[q.key].capable === false
+      && cap[q.key][q.index] !== null && cap[q.key][q.index] !== undefined)
+    .map((q) => q.title)
+}
 
 /**
  * One or two sentences that sum up an API result. It only reads API fields:
@@ -167,7 +197,10 @@ export function summarySentence(result) {
     return `All ${total} builds are in control and capable. Every build can be released.`
   }
   // In control, but not capable (an index is below the minimum, or an index is missing).
-  const lead = 'No build broke a rule, but the process is not shown to be capable of the specification.'
+  const below = belowMinimum(result)
+  const lead = below.length > 0
+    ? `No build broke a rule, but ${below.join(' and ')} ${below.length === 1 ? 'is' : 'are'} below the minimum of ${fmt(result.settings.capable_min_index, 2)}, so the process is not shown to be capable.`
+    : 'No build broke a rule, but the process is not shown to be capable of the specification.'
   return retest > 0 ? `${lead} ${capital(retestText)}` : lead
 }
 

@@ -35,12 +35,27 @@ def test_root_links_to_docs():
     assert body["docs"] == "/docs"
 
 
-def test_datasets_lists_three():
+def test_datasets_lists_four():
     r = client.get("/datasets")
     assert r.status_code == 200
     names = [d["name"] for d in r.json()["datasets"]]
-    assert sorted(names) == ["capable_baseline", "laser_power_excursion", "oxygen_drift"]
+    assert sorted(names) == ["capable_baseline", "laser_power_excursion", "marginal_spread", "oxygen_drift"]
     assert all(d["description"] for d in r.json()["datasets"])
+
+
+def test_marginal_spread_is_in_control_but_one_index_is_below_the_minimum():
+    body = client.get("/analyze/marginal_spread").json()
+    assert body["process_capable"] is False
+    assert body["first_out_of_control_build"] is None
+    assert {b["disposition"] for b in body["builds"]} == {"RELEASE"}
+    cap = body["capability"]
+    assert cap["dimensional_dev_mm"]["cpk"] == pytest.approx(1.192, abs=0.0005)
+    assert cap["dimensional_dev_mm"]["reliable"] is True
+    assert cap["dimensional_dev_mm"]["capable"] is False
+    # tensile strength and porosity are the same stream as capable_baseline: still capable
+    assert cap["uts_MPa"]["cpl"] == pytest.approx(4.810, abs=0.0005)
+    assert cap["porosity_pct"]["cpu"] == pytest.approx(3.695, abs=0.0005)
+    assert cap["uts_MPa"]["capable"] is True and cap["porosity_pct"]["capable"] is True
 
 
 def test_spec_limits_are_the_defaults():
@@ -179,7 +194,7 @@ def test_imports_work_inside_a_bundle(tmp_path):
         "from fastapi.testclient import TestClient\n"
         "c = TestClient(main.app)\n"
         "assert main.analyze.__module__ == 'qc', main.analyze.__module__\n"
-        "assert len(c.get('/datasets').json()['datasets']) == 3\n"
+        "assert len(c.get('/datasets').json()['datasets']) == 4\n"
         "assert c.get('/analyze/capable_baseline').json()['process_capable'] is True\n"
         "print('bundle ok')\n"
     )

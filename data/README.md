@@ -10,6 +10,7 @@ have: 30 builds, 5 witness coupons per build, one row per coupon (150 rows per f
 |---|---|
 | `capable_baseline.csv` | Stable process, all 30 builds in control. Should be reported capable (Cpl and Cpu well above 1.33). |
 | `oxygen_drift.csv` | Chamber oxygen creeps up linearly from build 21 (about 100 to 430 ppm). UTS falls and porosity rises; in the tool's output the first out-of-control build is B-1023, and "investigate first" lists chamber oxygen on top for every flagged build. |
+| `marginal_spread.csv` | Same process as `capable_baseline.csv` (same random stream, so tensile strength, porosity and every print parameter are identical) but the dimensional deviation varies more (within-build sd 0.030 mm instead of 0.020 mm). Every build is in control on every chart, yet the dimensional index Cpk is about 1.19, below the minimum of 1.33. Shows "in control but not capable": process capable = no, no flagged build, all 30 builds RELEASE. |
 | `laser_power_excursion.csv` | Laser power drops about 15 % (to about 238 W) on builds 24, 25 and 26 only. Porosity spikes above its upper limit and UTS dips on those builds (rule 1), then recovers. The first out-of-control build is B-1024 and "investigate first" puts laser power on top for builds 1024-1026. |
 
 ## Columns (19 in the sample files, in this order)
@@ -56,7 +57,7 @@ Build-level columns (the same value on all 5 rows of a build). The tool treats t
 the 3 builds (15 rows) of the hand calculation in `SPEC.md` section 4; its UTS Cpl is 3.877.
 [`template/aeroprint_template_with_parameters.csv`](template/aeroprint_template_with_parameters.csv) adds
 the 8 optional parameter columns. The values are invented. They live in `template/` (not next to the
-three sample files) so the "3 sample datasets" count stays true. Guide: [`../docs/csv-format.md`](../docs/csv-format.md).
+four sample files) so the "4 sample datasets" count stays true. Guide: [`../docs/csv-format.md`](../docs/csv-format.md).
 
 ## Spec limits used
 
@@ -79,7 +80,7 @@ below 280; porosity rises 0.0007 % per ppm above 100 and 0.006 % per W below 280
     .venv/Scripts/python.exe data/generate.py
 
 **Seeds** (numpy `default_rng`, one stream per file): `capable_baseline.csv` 5336,
-`oxygen_drift.csv` 5322, `laser_power_excursion.csv` 5318 (base seed 5300 + k).
+`oxygen_drift.csv` 5322, `laser_power_excursion.csv` 5318, `marginal_spread.csv` 5336 (base seed 5300 + k).
 **How the seeds were chosen, honestly:** for each file we tried 5300, 5301, 5302, ... and kept the
 first seed whose builds 1-20 raised no alarm under the tool's 8 Nelson rules (on the UTS,
 porosity and dimensional charts and on all build-parameter I-MR charts) and whose planted story
@@ -87,6 +88,8 @@ then played out as designed. So the clean baselines are clean by selection. **Re
 8 rules WILL sometimes raise chance alarms** (a false alarm every so often is expected from
 noise alone), which is why the tool lists the rules broken per build for an engineer to judge
 rather than treating a flag as proof.
+
+**How `marginal_spread.csv` was chosen, honestly:** the recipe is the `capable_baseline` generator with only the dimensional noise sd changed (0.030 mm). `numpy` draws the same random numbers whatever the sd, so only the dimensional column is rescaled. We scanned k = 0, 1, 2, ... and kept the first seed (k = 36, 5336, which is also the seed of `capable_baseline`) where all 30 builds raise no alarm on any quality chart or parameter chart. Seeds 5300 to 5335 each had at least one chance alarm somewhere (for example k = 4 was clean on the quality charts but not on every parameter chart). `capable_baseline.csv`, `oxygen_drift.csv` and `laser_power_excursion.csv` are byte-identical to before.
 
 ### Check values from the generator script (not a test of the tool)
 
@@ -98,6 +101,7 @@ LSL 900, Cpu for porosity vs USL 0.5.
 | `capable_baseline.csv` | 973.04 | 11.78 | 5.06 | 4.81 | 0.214 | 0.060 | 0.026 | 3.70 |
 | `oxygen_drift.csv` | 973.44 | 12.29 | 5.28 | 4.64 | 0.207 | 0.065 | 0.028 | 3.51 |
 | `laser_power_excursion.csv` | 973.65 | 11.34 | 4.88 | 5.04 | 0.207 | 0.064 | 0.028 | 3.54 |
+| `marginal_spread.csv` | 973.04 | 11.78 | 5.06 | 4.81 | 0.214 | 0.060 | 0.026 | 3.70 |
 
 Build means, builds 20 to 30 (shows where the planted signal appears):
 
@@ -108,6 +112,8 @@ Build means, builds 20 to 30 (shows where the planted signal appears):
 | `laser_power_excursion.csv` | 969.5, 971.8, 976.2, 970.6, 943.2, 942.3, 939.2, 975.7, 974.9, 973.5, 969.4 | 0.209, 0.235, 0.218, 0.227, 0.439, 0.450, 0.453, 0.171, 0.209, 0.198, 0.227 |
 
 ### What the tool reports on these files (default specs)
+
+- `marginal_spread.csv`: no rule fires on any chart, including all eight build-parameter I-MR charts, so the first out-of-control build is none and all 30 builds are RELEASE. Process capable = no only because the dimensional deviation index is low: Cpk 1.192 (Cp 1.199, Cpl 1.206, Cpu 1.192; within-build sigma 0.0278 mm), reliable and below 1.33. Tensile strength Cpl 4.81 and porosity Cpu 3.70 are the same as in `capable_baseline.csv` and meet the minimum. The tool also notes that the dimensional baseline looks non-normal (Shapiro-Wilk p = 0.0075, a chance result), so that index is approximate.
 
 - `capable_baseline.csv`: process capable = yes; all 30 builds RELEASE; no rule broken on any
   quality chart and no rule fires on any build-parameter I-MR chart (all 8 Nelson rules).

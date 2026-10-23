@@ -59,7 +59,7 @@ measure). The tool skips it and tells you.
 
 Keep `coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes,
 or anything else if it is useful to you. The tool never reads them. A blank cell or text in an
-extra column causes no error. (The three sample files in `data/` contain such columns; that is why
+extra column causes no error. (The four sample files in `data/` contain such columns; that is why
 they have 19 columns.)
 
 ## 5. Formatting rules

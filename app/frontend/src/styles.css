@@ -160,3 +160,9 @@ button.link-button { align-self: flex-start; background: none; border: 0; paddin
 .baseline-control { margin: 8px 0 16px; }
 .baseline-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .baseline-control .error { margin: 4px 0 0; }
+
+/* H-14: the chart key is a bulleted list */
+.charts-intro { margin: 0 0 12px; padding-left: 1.25rem; color: var(--muted); }
+.charts-intro li { margin: 2px 0; }
+.indices li.below-min { border-style: solid; border-width: 2px; border-color: var(--warn); }
+.index-meta.status-below { display: block; color: var(--warn); font-weight: 700; }

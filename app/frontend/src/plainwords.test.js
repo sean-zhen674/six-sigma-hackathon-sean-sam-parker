@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   PARAM_NAMES, CHART_HELP, SPEC_FIELDS, RULE_PHRASES, UNRELIABLE_TEXT, COLUMN_MEANINGS, DATASET_TEXT,
-  explainUploadError, explainRule, plainNote, summarySentence, chartTitle, errorText, DIM_GROUP, validateSpecs,
+  explainUploadError, explainRule, plainNote, summarySentence, capabilityRow, chartTitle, errorText, DIM_GROUP, validateSpecs,
 } from './format.js'
 import { TOUR_STEPS } from './tour.js'
 import { QUALITY, PARAMS, LEGEND_RULES, TEXT } from './labels.js'
@@ -147,6 +147,9 @@ describe('visible-string constants use plain words', () => {
     const builds = [{ build_id: 'B-1', disposition: 'QUARANTINE', investigate_first: [{ parameter: 'laser_power_W', z: 3, rules: [1] }] }]
     texts.push(summarySentence({ process_capable: false, first_out_of_control_build: 'B-1', builds }))
     texts.push(summarySentence({ process_capable: true, first_out_of_control_build: null, builds: [] }))
+    texts.push(summarySentence({ process_capable: false, first_out_of_control_build: null, builds: [], settings: { capable_min_index: 1.33 }, capability: { dimensional_dev_mm: { cpk: 1.19, reliable: true, capable: false } } }))
+    texts.push(capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33).statusText)
+    texts.push(capabilityRow({ cpk: 1.9, reliable: true, capable: true }, 'cpk', 1.33).statusText)
     const bad = texts.map((t) => [t, offenders(t)]).filter(([, o]) => o.length)
     expect(bad).toEqual([])
   })

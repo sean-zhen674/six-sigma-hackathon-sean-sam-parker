@@ -84,14 +84,11 @@ export default function ControlChart({
           width={W}
           height={H}
           role="img"
-          aria-label={`${title}. ${flaggedIds.length ? `Out of control: ${flaggedIds.join(', ')}.` : 'No build breaks a rule.'}`}
+          aria-label={`${title}. ${baselineRight !== null ? `Shaded area: Baseline builds 1 to ${Math.min(baselineN, n)}. ` : ''}${flaggedIds.length ? `Out of control: ${flaggedIds.join(', ')}.` : 'No build breaks a rule.'}`}
         >
           {baselineRight !== null && (
             <g>
               <rect x={baselineLeft} y={top} width={baselineRight - baselineLeft} height={bottom - top} fill="#e0ecff" />
-              <text x={baselineLeft + 4} y={top + 12} fontSize="12" fill="#334155">
-                {`baseline builds 1 to ${Math.min(baselineN, n)}`}
-              </text>
             </g>
           )}
 

@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_app_data_is_an_exact_copy_of_data():
     sources = sorted((ROOT / "data").glob("*.csv"))
-    assert len(sources) == 3
+    assert len(sources) == 4
     for src in sources:
         copy = ROOT / "app" / "data" / src.name
         assert copy.is_file(), f"missing {copy}; run: bash app/manifestme.sh"

@@ -68,10 +68,41 @@ describe('capabilityRow', () => {
     expect(row.text).toBe('not available')
     expect(row.message).toBe('There is no variation inside the builds, so the capability indices are undefined.')
   })
-  it('labels reliability from the API flag', () => {
-    expect(capabilityRow({ cpl: 4.6351, reliable: false, capable: false }, 'cpl').reliableLabel).toBe('not reliable (chart out of control)')
-    expect(capabilityRow({ cpl: 4.6351, reliable: true, capable: true }, 'cpl').reliableLabel).toBe('reliable')
-    expect(capabilityRow({ cpl: 4.6351, reliable: true, capable: true }, 'cpl').text).toBe('4.64')
+  it('chart out of control: no reliability line at all, the warning stays', () => {
+    const row = capabilityRow({ cpl: 4.6351, reliable: false, capable: false }, 'cpl', 1.33)
+    expect(row.statusText).toBeNull()
+    expect(row.status).toBe('unreliable')
+    expect(row.unreliable).toBe(true)
+    expect(JSON.stringify(row)).not.toMatch(/[Nn]ot reliable/)
+  })
+  it('in control and at or above the minimum: Meets the minimum', () => {
+    const row = capabilityRow({ cpl: 4.6351, reliable: true, capable: true }, 'cpl', 1.33)
+    expect(row.text).toBe('4.64')
+    expect(row.status).toBe('meets')
+    expect(row.statusText).toBe('Meets the minimum of 1.33')
+  })
+  it('in control and below the minimum: Below the minimum, Not capable', () => {
+    const row = capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33)
+    expect(row.status).toBe('below')
+    expect(row.statusText).toBe('Below the minimum of 1.33: Not capable')
+    expect(row.unreliable).toBe(false)
+  })
+  it('the minimum in the text comes from the settings', () => {
+    expect(capabilityRow({ cpk: 1.6, reliable: true, capable: false }, 'cpk', 2).statusText).toBe('Below the minimum of 2.00: Not capable')
+  })
+  it('no index: no status line, the message stays', () => {
+    const row = capabilityRow({ cpl: null, reliable: true, capable: false, message: 'zero within-build variation: capability indices are undefined' }, 'cpl', 1.33)
+    expect(row.statusText).toBeNull()
+    expect(row.message).toContain('undefined')
+  })
+})
+
+describe('chartsIntro is a list of four short bullets', () => {
+  it('has four items, none of them one long paragraph', () => {
+    expect(Array.isArray(TEXT.chartsIntro)).toBe(true)
+    expect(TEXT.chartsIntro).toHaveLength(4)
+    expect(TEXT.chartsIntro[0]).toBe('Blue shading: Baseline builds used to calculate the limits.')
+    expect(TEXT.chartsIntro.every((t) => t.length < 100)).toBe(true)
   })
 })
 
@@ -134,6 +165,25 @@ describe('summarySentence', () => {
     expect(summarySentence(r)).toBe(
       'The process is in control and capable. 1 build has a coupon outside the specification and should be retested.')
   })
+  it('in control but one index below the minimum: names the measure', () => {
+    const cap = {
+      uts_MPa: { cpl: 4.8, reliable: true, capable: true },
+      porosity_pct: { cpu: 3.7, reliable: true, capable: true },
+      dimensional_dev_mm: { cpk: 1.19, reliable: true, capable: false },
+    }
+    const r = { process_capable: false, first_out_of_control_build: null, builds: rel(30), capability: cap, settings: { capable_min_index: 1.33 } }
+    expect(summarySentence(r)).toBe(
+      'No build broke a rule, but Dimensional deviation is below the minimum of 1.33, so the process is not shown to be capable.')
+  })
+  it('two measures below the minimum', () => {
+    const cap = {
+      uts_MPa: { cpl: 1.1, reliable: true, capable: false },
+      porosity_pct: { cpu: 1.0, reliable: true, capable: false },
+      dimensional_dev_mm: { cpk: 2, reliable: true, capable: true },
+    }
+    const r = { process_capable: false, first_out_of_control_build: null, builds: rel(3), capability: cap, settings: { capable_min_index: 1.33 } }
+    expect(summarySentence(r)).toContain('Tensile strength and Porosity are below the minimum of 1.33')
+  })
   it('not capable, nothing to retest', () => {
     const r = { process_capable: false, first_out_of_control_build: null, builds: rel(30) }
     expect(summarySentence(r)).toBe('No build broke a rule, but the process is not shown to be capable of the specification.')
@@ -179,6 +229,7 @@ describe('datasetLabel', () => {
     expect(datasetLabel('capable_baseline')).toBe('Capable Baseline')
     expect(datasetLabel('oxygen_drift')).toBe('Oxygen Drift')
     expect(datasetLabel('laser_power_excursion')).toBe('Laser Power Excursion')
+    expect(datasetLabel('marginal_spread')).toBe('Marginal Spread')
   })
   it('handles empty input', () => {
     expect(datasetLabel('')).toBe('')

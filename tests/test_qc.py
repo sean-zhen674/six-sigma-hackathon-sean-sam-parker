@@ -464,12 +464,14 @@ def test_template_with_parameters_uses_all_eight():
     assert result["capability"]["uts_MPa"]["cpl"] == pytest.approx(3.877, abs=0.0005)
 
 
-# H-10 regression: the three sample datasets must give the numbers they gave before the change.
+# H-10 regression: the sample datasets must give the numbers they gave before the change.
 SAMPLES = {
     # name: (process_capable, first out of control, top suspect, Cpl uts, Cpu porosity, Cpk dimensional)
     "capable_baseline": (True, None, None, 4.810, 3.695, 1.792),
     "oxygen_drift": (False, "B-1023", "chamber_oxygen_ppm", 4.635, 3.511, 1.416),
     "laser_power_excursion": (False, "B-1024", "laser_power_W", 5.036, 3.538, 1.676),
+    # H-14: in control, only the dimensional Cpk (1.192) is below 1.33
+    "marginal_spread": (False, None, None, 4.810, 3.695, 1.192),
 }
 
 

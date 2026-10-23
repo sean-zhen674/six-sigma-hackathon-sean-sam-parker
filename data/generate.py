@@ -1,4 +1,4 @@
-"""Generate the three simulated AeroPrint test datasets (all data is invented).
+"""Generate the four simulated AeroPrint test datasets (all data is invented).
 
 Run from the repo root:   .venv/Scripts/python.exe data/generate.py
 Same seed -> identical CSVs on every machine.
@@ -20,7 +20,12 @@ SCENARIO_SEEDS = {
     "capable_baseline": SEED + 36,        # 5336
     "oxygen_drift": SEED + 22,            # 5322
     "laser_power_excursion": SEED + 18,   # 5318
+    "marginal_spread": SEED + 36,         # 5336, the same stream as capable_baseline
 }
+# Within-build sd of the dimensional deviation (mm). 0.02 for every scenario except
+# marginal_spread, whose parts vary more: in control, but too spread out for the +/-0.10 mm spec.
+DIM_SD_DEFAULT = 0.02
+DIM_SD = {"marginal_spread": 0.03}
 N_BUILDS = 30
 N_COUPONS = 5
 OUT_DIR = Path(__file__).resolve().parent
@@ -85,7 +90,7 @@ def make_scenario(scenario, seed):
             yld = 0.9 * uts + rng.normal(0, 4)
             elong = elong_mean + rng.normal(0, 0.4)
             por = por_mean * rng.lognormal(0, 0.125)  # skewed, always > 0
-            dev = rng.normal(0, 0.02)
+            dev = rng.normal(0, DIM_SD.get(scenario, DIM_SD_DEFAULT))
             uts, yld, elong = round(uts, 1), round(yld, 1), round(elong, 2)
             por, dev = round(por, 3), round(dev, 3)
             ok = bool(uts >= 900 and por <= 0.5 and abs(dev) <= 0.10)

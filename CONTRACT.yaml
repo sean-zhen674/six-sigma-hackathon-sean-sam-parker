@@ -154,7 +154,7 @@ tasks:
       git clone of the public repo into an empty folder, then the app/
       testme script and the H-03 tests both pass with no extra steps; git
       grep -i "api_key" finds no real key; the Devpost entry links the repo.
-    result: ""
+    result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical"
 
   - id: H-09
     title: Dashboard usability pass (clearer verdict, plain-English summary, help text, guided tour, editable spec limits)
@@ -247,3 +247,20 @@ tasks:
       the dataset description has no early line break; numbers unchanged on the three datasets; no
       horizontal scroll at 375 px; new screenshots.
     result: "Built and browser-checked 2026-10-22 23:03: boxes side by side (stacked under 800 px), Parameters title, baseline builds in Control charts (baseline 10 on oxygen_drift gives first alarm B-1022), CSV format popup, capital after colon, grey text removed from Parameters; npm test 105 passed, pytest 89 passed, build OK, numbers unchanged"
+
+  - id: H-14
+    title: Capability index below 1.33 wording; remove the out-of-control reliability line; fourth example dataset that is in control but not capable
+    points: "supports the working tool (25) and clear demonstration (10): every capability outcome is visible"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-22 23:21"
+    owns: ["app/frontend/", "app/main.py", "app/data/", "app/manifest.json", "data/", "tests/", "demo/", "docs/csv-format.md"]
+    notes: >
+      Team request. Statistics in app/qc.py do not change. A new dataset marginal_spread (in control, one index
+      below 1.33) is added as a fourth example; the three existing datasets and their numbers must not change.
+    definition_of_done: >
+      pytest and npm test pass; marginal_spread gives process capable No with no out-of-control build and an
+      index below 1.33; the three existing datasets are byte-identical; the manifest lists 8 files and is
+      regenerated with Python 3.12; the banner shows a clear message for below 1.33 and no
+      'Not reliable (Chart out of control)' line; screenshots; stats review.
+    result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical"

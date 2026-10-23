@@ -284,16 +284,16 @@ function Summary({ result }) {
       <section className={`banner ${capable ? 'yes' : 'no'}`} aria-labelledby="banner-h">
         <h2 id="banner-h">
           <span aria-hidden="true">{capable ? '✔' : '✖'}</span>{' '}
-          Process capable: {capable ? 'YES' : 'NO'}
+          Process Capable: {capable ? 'Yes' : 'No'}
         </h2>
         <p className="first-ooc">
-          First out-of-control build: <strong>{first ?? 'none'}</strong>
+          First out-of-control build: <strong>{first ?? 'None'}</strong>
         </p>
         <ul className="indices">
           {QUALITY.map((q) => {
-            const row = capabilityRow(cap[q.key], q.index)
+            const row = capabilityRow(cap[q.key], q.index, threshold)
             return (
-              <li key={q.key} className={row.unreliable ? 'unreliable' : ''}>
+              <li key={q.key} className={row.unreliable ? 'unreliable' : row.status === 'below' ? 'below-min' : ''}>
                 <span className="index-name">{q.indexName}</span>
                 <span className="index-value">{row.text}</span>
                 {row.unreliable && (
@@ -301,10 +301,13 @@ function Summary({ result }) {
                     <span aria-hidden="true">⚠</span> {UNRELIABLE_TEXT}
                   </span>
                 )}
-                <span className="index-meta">
-                  {row.reliableLabel}; needs at least {fmt(threshold, 2)}
-                  {row.message ? `. ${row.message}` : ''}
-                </span>
+                {row.statusText && (
+                  <span className={`index-meta status-${row.status}`}>
+                    <span aria-hidden="true">{row.status === 'below' ? '⚠ ' : '✔ '}</span>
+                    {row.statusText}
+                  </span>
+                )}
+                {row.message && <span className="index-meta">{row.message}</span>}
               </li>
             )
           })}
@@ -333,7 +336,7 @@ function ChartsSection({ result, children }) {
   return (
     <section aria-labelledby="charts-h">
       <h2 id="charts-h">Control charts</h2>
-      <p className="muted">{TEXT.chartsIntro}</p>
+      <ul className="charts-intro">{TEXT.chartsIntro.map((t) => <li key={t}>{t}</li>)}</ul>
       {children}
       {result && (
         <>

@@ -6,7 +6,7 @@
 export const QUALITY = [
   {
     key: 'uts_MPa', title: 'Tensile strength', unit: 'megapascals', digits: 1, index: 'cpl',
-    indexName: 'Tensile strength: Capability index for the lower limit (Cpl)',
+    indexName: 'Tensile Strength: Capability index for the lower limit (Cpl)',
   },
   {
     key: 'porosity_pct', title: 'Porosity', unit: 'percent', digits: 3, index: 'cpu',
@@ -14,7 +14,7 @@ export const QUALITY = [
   },
   {
     key: 'dimensional_dev_mm', title: 'Dimensional deviation', unit: 'millimeters', digits: 3, index: 'cpk',
-    indexName: 'Dimensional deviation: Capability index for the nearest limit (Cpk)',
+    indexName: 'Dimensional Deviation: Capability index for the nearest limit (Cpk)',
   },
 ]
 
@@ -54,7 +54,12 @@ export const TEXT = {
   baselineLabel: 'Baseline builds',
   baselineHelp: 'How many of the earliest builds are used to learn what normal looks like. The control limits are calculated from these builds, and every later build is compared against them. Default: 20, minimum: 5.',
   howToRead: 'A red point means that build behaved differently from the baseline builds; an index of {threshold} or more means the process meets the specification with margin, and it only counts while the chart is in control.',
-  chartsIntro: 'Blue shading = baseline builds used for the limits. Red diamond = a rule was broken (hover for the build and rules). The three lines on each chart are the center line, the upper control limit and the lower control limit; each chart lists their values below it.',
+  chartsIntro: [
+    'Blue shading: Baseline builds used to calculate the limits.',
+    'Red diamond: A rule was broken (hover for the build and the rules).',
+    'The three lines on each chart: Center line, upper control limit and lower control limit.',
+    'Values: Each chart lists the values of these lines below it.',
+  ],
   paramsHeading: 'Build parameters (single value and change-from-previous-build charts)',
   noParams: 'No print-parameter columns in this file, so there are no parameter charts and the likely cause is not ranked. Add columns such as chamber_oxygen_ppm or laser_power_W to get them (see the "How should my file be formatted?" button under Upload dataset).',
   noParamsShort: 'No print-parameter columns in this file, so the likely cause is not ranked.',

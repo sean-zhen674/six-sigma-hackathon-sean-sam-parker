@@ -91,6 +91,7 @@ describe('dataset text and spec tags', () => {
     expect(datasetText('capable_baseline', 'x')).toMatch(/^Capable Baseline: /)
     expect(datasetText('oxygen_drift', 'x')).toMatch(/^Oxygen Drift: /)
     expect(datasetText('laser_power_excursion', 'x')).toMatch(/^Laser Power Excursion: /)
+    expect(datasetText('marginal_spread', 'x')).toMatch(/^Marginal Spread: /)
     expect(datasetText('oxygen_drift', 'api text')).toContain('Chamber oxygen')
     expect(datasetText('laser_power_excursion', 'x')).toContain('15 percent')
     expect(datasetText('new_one', 'api text')).toBe('api text')
@@ -163,7 +164,7 @@ describe('explainUploadError: newer messages', () => {
 // ---- H-13: the first word after every colon on the page starts with a capital letter ----
 import { TOUR_STEPS } from './tour.js'
 import { TEXT, QUALITY, LEGEND_RULES } from './labels.js'
-import { CHART_HELP, UNRELIABLE_TEXT, explainUploadError, summarySentence } from './format.js'
+import { CHART_HELP, UNRELIABLE_TEXT, explainUploadError, summarySentence, capabilityRow } from './format.js'
 import { DATASET_TEXT, chartTitle, plainNote, explainRule, COLUMN_MEANINGS } from './plain.js'
 
 describe('capital letter after a colon in the displayed text', () => {
@@ -190,6 +191,11 @@ describe('capital letter after a colon in the displayed text', () => {
     'could not read the upload as a CSV', 'need at least 2 builds',
   ]) add(explainUploadError(m))
   add(summarySentence({ builds: [{ build_id: 'B-1', disposition: 'QUARANTINE', investigate_first: [{ parameter: 'chamber_oxygen_ppm', z: 3, rules: [] }] }], first_out_of_control_build: 'B-1', process_capable: false }))
+
+  const below = { process_capable: false, first_out_of_control_build: null, builds: [], settings: { capable_min_index: 1.33 }, capability: { dimensional_dev_mm: { cpk: 1.19, reliable: true, capable: false } } }
+  add(summarySentence(below))
+  add(capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33).statusText)
+  add(capabilityRow({ cpk: 1.9, reliable: true, capable: true }, 'cpk', 1.33).statusText)
 
   it('has strings to scan', () => {
     expect(shown.length).toBeGreaterThan(60)

@@ -31,11 +31,14 @@
     "data/laser_power_excursion.csv": {
       "checksum": "3b7e22368019ea3caf62bb9018337927"
     },
+    "data/marginal_spread.csv": {
+      "checksum": "8ad2ce3907147580d007bb73e089fcc7"
+    },
     "data/oxygen_drift.csv": {
       "checksum": "afda5c1df90dc825c6f4461e9cb2b6f3"
     },
     "main.py": {
-      "checksum": "961ea5c14af0ad6c3828ebf30bbca604"
+      "checksum": "e644cce54dd60485ca900d07663277be"
     },
     "qc.py": {
       "checksum": "08beada13dc395991559c589cb97db55"
