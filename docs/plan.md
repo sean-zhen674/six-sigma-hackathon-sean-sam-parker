@@ -105,4 +105,10 @@ process capable of the aerospace spec, since when not, and what should be done w
 - Three datasets: capable_baseline, oxygen_drift, marginal_spread.
 - README files are rewritten last, after the team approves the dashboard.
 
+## H-17 decisions (calculations and histograms toggle, 2026-10-25)
+- Team request: inside the Process Capable box, a toggle shows the calculation and a histogram for each measurement, with lines for the allowed values and the process average.
+- API: capability[metric].histogram = {edges, counts, n, n_builds} of the individual coupons of the baseline builds (the same coupons as the process average and sigma-hat). Bins by Sturges' rule, ceil(log2 n) + 1, at least 5 and at most 30, equal width over [min, max]. All values equal gives one bin with edges [v, v]; fewer than 2 values gives null. No existing number changes (checked by saving the analysis of the three datasets at baseline 20 and 3 before and after: identical once the histogram keys are removed).
+- Page: a closed-by-default details element "Show the calculations and histograms". Each block lists the steps with the API's numbers (process average, average range, sigma-hat = average range / 2.326, then only the indices that exist) and the verdict from the API's capable and reliable fields. The page only joins and rounds numbers; it adds no statistic.
+- Histogram: hand-drawn SVG, no vertical numbers, a caption with the coupon and build counts, dashed purple lines for the allowed values, a solid green line for the process average, labels on separate rows so none overlap, hover or tap tooltip.
+
 - Reminder (asked 2026-10-23): at the very end run ONE full consistency pass over all files (stale wording, thresholds, dead code, test names, docs against code, screenshots), then update the README files, then ask before H-08. Do not repeat the audit after every small change; it is expensive.

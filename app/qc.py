@@ -234,6 +234,31 @@ def capability(xbarbar, rbar, lsl=None, usl=None, in_control=True):
     return out
 
 
+def sturges_bins(n):
+    """Number of histogram bins by Sturges' rule: ceil(log2(n)) + 1, at least 5 and at most 30."""
+    return min(30, max(5, math.ceil(math.log2(n)) + 1))
+
+
+def coupon_histogram(values, n_builds):
+    """Histogram of individual coupon values (display only; it changes no statistic).
+
+    Rule: Sturges bins, ceil(log2(n)) + 1 (at least 5, at most 30), equal width over [min, max] of the
+    values, made with numpy.histogram. Each bin is [left, right) except the last, which also holds its
+    right edge, so the counts always add up to n.
+    Returns {"edges": [bins + 1 numbers], "counts": [bins integers], "n": coupons, "n_builds": builds}.
+    Degenerate cases: all values equal gives ONE bin with edges [v, v] (no width to split, never NaN);
+    fewer than 2 values gives None.
+    """
+    v = np.asarray(values, dtype=float)
+    if len(v) < 2:
+        return None
+    lo, hi = float(v.min()), float(v.max())
+    if lo == hi:
+        return {"edges": [lo, hi], "counts": [len(v)], "n": len(v), "n_builds": n_builds}
+    counts, edges = np.histogram(v, bins=sturges_bins(len(v)), range=(lo, hi))
+    return {"edges": edges.tolist(), "counts": counts.tolist(), "n": len(v), "n_builds": n_builds}
+
+
 def normality(values, always_warn=None):
     """Shapiro-Wilk test on the baseline coupons. Returns {"p_value", "warning"}.
 
@@ -510,6 +535,7 @@ def analyze(df, specs=None, baseline_n=20):
         cap["normality_p"] = norm["p_value"]
         cap["normality_warning"] = norm["warning"]
         cap["target"] = spec["target"]
+        cap["histogram"] = coupon_histogram(base_values, n_base)  # the same coupons as the mean and sigma-hat
         capabilities[col] = cap
         if norm["warning"]:
             warnings.append(f"{col}: {norm['warning']}")

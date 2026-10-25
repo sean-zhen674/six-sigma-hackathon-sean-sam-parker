@@ -360,3 +360,37 @@ def test_few_baseline_builds_add_a_warning_and_the_default_does_not():
         assert not any("few baseline builds" in w for w in full["warnings"])
     nine = client.get("/analyze/capable_baseline", params={"baseline_n": 9}).json()
     assert any("few baseline builds (9)" in w for w in nine["warnings"])
+
+
+# ---- H-17: the histogram of the baseline coupons is part of capability[metric] ----
+
+def test_analyze_includes_the_histogram_for_each_metric():
+    body = client.get("/analyze/capable_baseline").json()
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        h = body["capability"][col]["histogram"]
+        assert set(h) == {"edges", "counts", "n", "n_builds"}
+        assert sum(h["counts"]) == h["n"] == 100 and h["n_builds"] == 20
+    few = client.get("/analyze/capable_baseline", params={"baseline_n": 3}).json()
+    assert few["capability"]["uts_MPa"]["histogram"]["n"] == 15
+
+
+def test_post_analyze_includes_the_histogram_known_answer():
+    """The SPEC known-answer coupons: 15 UTS values, 5 bins over 939..959."""
+    uts = {"B1": [945, 952, 950, 948, 955], "B2": [951, 953, 955, 957, 959], "B3": [939, 951, 945, 947, 943]}
+    rows = [{"build_id": b, "build_timestamp": f"2026-01-0{i + 1}T08:00:00", "uts_MPa": v,
+             "porosity_pct": 0.2 + 0.01 * j, "dimensional_dev_mm": 0.01 * j}
+            for i, (b, vals) in enumerate(uts.items()) for j, v in enumerate(vals)]
+    r = post_csv(pd.DataFrame(rows).to_csv(index=False).encode())
+    assert r.status_code == 200, r.text
+    h = r.json()["capability"]["uts_MPa"]["histogram"]
+    assert h["edges"] == pytest.approx([939, 943, 947, 951, 955, 959])
+    assert h["counts"] == [1, 3, 3, 4, 4]
+    assert h["n"] == 15 and h["n_builds"] == 3
+
+
+def test_capability_keys_through_the_api_are_the_old_keys_plus_histogram():
+    old = {"sigma_hat", "lsl", "usl", "mean", "cpl", "cpu", "cp", "cpk", "reliable", "capable", "message",
+           "normality_p", "normality_warning", "target"}
+    body = client.get("/analyze/oxygen_drift").json()
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        assert set(body["capability"][col]) == old | {"histogram"}

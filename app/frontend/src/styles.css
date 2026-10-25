@@ -190,3 +190,20 @@ button.link-button { align-self: flex-start; background: none; border: 0; paddin
 
 .baseline-caution { margin: 6px 0 0; padding: 6px 10px; background: var(--warn-bg); border: 1px solid #b54708; border-left-width: 6px; border-radius: 6px; color: var(--warn); font-weight: 600; }
 .section-title { font-size: 1.4rem; }
+
+/* H-17: the calculations and histograms toggle inside the Process Capable box (white card so the text is readable on the red or green banner) */
+.calc-toggle { margin: 12px 0 0; }
+.calc-toggle > summary { font-weight: 700; padding: 6px 0; }
+.calc-body { background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 16px 16px; margin-top: 6px; }
+.calc-intro { margin: 12px 0 0; color: var(--muted); }
+.calc-block h3 { margin: 20px 0 8px; font-size: 1.15rem; }
+.calc-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.calc-steps { min-width: 0; }
+.calc-steps ol { margin: 0; padding-left: 1.4rem; }
+.calc-steps li { margin: 0 0 10px; overflow-wrap: anywhere; }
+.calc-steps li > span { display: block; }
+.calc-words { color: var(--muted); }
+.calc-math { font-weight: 600; }
+.calc-verdict { margin: 4px 0 0; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 6px; font-weight: 700; }
+.calc-message { margin: 4px 0 0; padding: 6px 10px; background: var(--warn-bg); border: 1px solid #b54708; border-radius: 6px; color: var(--warn); font-weight: 600; }
+.histogram .chart-plot { min-width: 420px; }

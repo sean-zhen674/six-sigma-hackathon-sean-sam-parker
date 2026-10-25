@@ -299,3 +299,21 @@ tasks:
       dead code removed; the dashboard caution uses baseline_n_used like the API; README files untouched.
     result: "Done and verified 2026-10-23 01:36: audit findings fixed (legend capitals, baseline caution driven by baseline_n_used, dead spec-line code removed, h3 sub-headings, stale comments and docs); no README touched; pytest 92 passed on both Pythons, npm test 116 passed, build OK, banner numbers unchanged on all three datasets"
 
+
+  - id: H-17
+    title: Capability calculations and histogram per metric, in a toggle inside the Process Capable box
+    points: "supports the statistics (35) and clear demonstration (10): the team can show how each index is calculated"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-25 18:28"
+    owns: ["app/", "tests/", "docs/", "demo/", "SPEC.md", "CONTRACT.yaml"]
+    notes: >
+      Team request. The analysis adds, per metric, a histogram of the individual coupon values of the
+      baseline builds (edges and counts). The dashboard shows, inside a toggle in the Process Capable box,
+      the calculation steps with the real numbers and a histogram with lines for the allowed values
+      (limits) and the process average. No existing statistic changes.
+    definition_of_done: >
+      pytest and npm test pass; counts sum to the number of baseline coupons; the calculation lines
+      reproduce Cpl, Cpu, Cp and Cpk from mean, sigma-hat and the limits; every existing number on the
+      three datasets is unchanged; manifest regenerated with Python 3.12 and 7 files; stats review.
+    result: "Built and reviewed 2026-10-25 18:40: capability[metric].histogram (Sturges bins of the baseline coupons) and a toggle in the Process Capable box with the calculation steps and a histogram with allowed-value and process-average lines; existing numbers unchanged (before/after identical); pytest 108 passed on both Pythons, npm test 134 passed, build OK, manifest 7 files, stats review PASS"

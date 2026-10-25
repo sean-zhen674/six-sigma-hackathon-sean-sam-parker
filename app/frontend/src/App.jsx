@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { analyzeDataset, analyzeUpload, fetchDatasets, fetchSpecLimits } from './api.js'
+import Calculations from './Calculations.jsx'
 import ControlChart from './ControlChart.jsx'
 import CsvHelp from './CsvHelp.jsx'
 import Tour from './Tour.jsx'
@@ -313,6 +314,7 @@ function Summary({ result }) {
             )
           })}
         </ul>
+        <Calculations result={result} />
         <p className="how">
           {TEXT.howToRead.replace('{threshold}', fmt(threshold, 2))}
         </p>

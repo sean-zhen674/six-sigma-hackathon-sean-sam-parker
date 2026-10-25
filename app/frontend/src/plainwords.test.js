@@ -6,6 +6,32 @@ import {
 import { TOUR_STEPS } from './tour.js'
 import { QUALITY, PARAMS, LEGEND_RULES, TEXT } from './labels.js'
 
+// H-17: the calculation lines, verdicts and the histogram summary, built from an API-shaped answer
+import { calcBlock, blockHeading, histogramSummary } from './calc.js'
+const H17_CAP = { mean: 0.5, sigma_hat: 0.02, lsl: -0.1, usl: 0.1, cpl: 1.8, cpu: 1.7, cp: 1.75, cpk: 1.7, reliable: true, capable: true, message: null, histogram: { edges: [0, 1], counts: [3], n: 3, n_builds: 1 } }
+const H17_CHARTS = { r: { cl: 0.05 } }
+const H17_SETTINGS = { capable_min_index: 1.33, subgroup_size: 5, constants: { d2: 2.326 } }
+function calcTexts() {
+  const out = []
+  const variants = [
+    H17_CAP,
+    { ...H17_CAP, lsl: null, cpl: null, cp: null },
+    { ...H17_CAP, usl: null, cpu: null, cp: null },
+    { ...H17_CAP, capable: false, cpk: 1.2 },
+    { ...H17_CAP, reliable: false, capable: false },
+    { ...H17_CAP, sigma_hat: 0, cpl: null, cpu: null, cp: null, cpk: null, capable: null, message: 'zero within-build variation: capability indices are undefined' },
+  ]
+  for (const q of QUALITY) {
+    out.push(blockHeading(q), histogramSummary(q, H17_CAP))
+    for (const cap of variants) {
+      const b = calcBlock(q, { capability: { [q.key]: cap }, charts: { [q.key]: H17_CHARTS }, settings: H17_SETTINGS })
+      b.steps.forEach((s) => out.push(s.title, s.words, s.math))
+      out.push(b.verdict, b.message)
+    }
+  }
+  return out.filter((t) => typeof t === 'string')
+}
+
 // GUARD, not proof. It looks for short forms that a reader outside the course would not know.
 //
 // Rule: a short form may appear only inside a parenthesis that directly follows the plain words
@@ -91,6 +117,11 @@ describe('visible-string constants use plain words', () => {
       expect(bad).toEqual([])
     })
   }
+
+  it('the calculation steps, verdicts and histogram summary have none', () => {
+    const bad = calcTexts().map((t) => [t, offenders(t)]).filter(([, o]) => o.length)
+    expect(bad).toEqual([])
+  })
 
   it('chart titles, rule sentences, notes, upload hints and summaries have none', () => {
     const texts = []

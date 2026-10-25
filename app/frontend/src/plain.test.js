@@ -160,6 +160,32 @@ import { TEXT, QUALITY, LEGEND_RULES } from './labels.js'
 import { CHART_HELP, UNRELIABLE_TEXT, explainUploadError, summarySentence, capabilityRow } from './format.js'
 import { DATASET_TEXT, chartTitle, plainNote, explainRule, COLUMN_MEANINGS } from './plain.js'
 
+// H-17: the calculation lines, verdicts and the histogram summary, built from an API-shaped answer
+import { calcBlock, blockHeading, histogramSummary } from './calc.js'
+const H17_CAP = { mean: 0.5, sigma_hat: 0.02, lsl: -0.1, usl: 0.1, cpl: 1.8, cpu: 1.7, cp: 1.75, cpk: 1.7, reliable: true, capable: true, message: null, histogram: { edges: [0, 1], counts: [3], n: 3, n_builds: 1 } }
+const H17_CHARTS = { r: { cl: 0.05 } }
+const H17_SETTINGS = { capable_min_index: 1.33, subgroup_size: 5, constants: { d2: 2.326 } }
+function calcTexts() {
+  const out = []
+  const variants = [
+    H17_CAP,
+    { ...H17_CAP, lsl: null, cpl: null, cp: null },
+    { ...H17_CAP, usl: null, cpu: null, cp: null },
+    { ...H17_CAP, capable: false, cpk: 1.2 },
+    { ...H17_CAP, reliable: false, capable: false },
+    { ...H17_CAP, sigma_hat: 0, cpl: null, cpu: null, cp: null, cpk: null, capable: null, message: 'zero within-build variation: capability indices are undefined' },
+  ]
+  for (const q of QUALITY) {
+    out.push(blockHeading(q), histogramSummary(q, H17_CAP))
+    for (const cap of variants) {
+      const b = calcBlock(q, { capability: { [q.key]: cap }, charts: { [q.key]: H17_CHARTS }, settings: H17_SETTINGS })
+      b.steps.forEach((s) => out.push(s.title, s.words, s.math))
+      out.push(b.verdict, b.message)
+    }
+  }
+  return out.filter((t) => typeof t === 'string')
+}
+
 describe('capital letter after a colon in the displayed text', () => {
   const shown = []
   const add = (v) => { if (typeof v === 'string') shown.push(v); else if (Array.isArray(v)) v.forEach(add); else if (v && typeof v === 'object') Object.values(v).forEach(add) }
@@ -191,6 +217,7 @@ describe('capital letter after a colon in the displayed text', () => {
   add(summarySentence(below))
   add(capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33).statusText)
   add(capabilityRow({ cpk: 1.9, reliable: true, capable: true }, 'cpk', 1.33).statusText)
+  add(calcTexts())
 
   it('has strings to scan', () => {
     expect(shown.length).toBeGreaterThan(60)

@@ -608,3 +608,100 @@ def test_baseline_below_the_recommended_size_adds_one_warning_and_changes_nothin
     assert expected in few["warnings"]
     assert not any("few baseline builds" in w for w in full["warnings"])
     assert few["settings"]["baseline_n_used"] == 9
+
+
+# ---------------------------------------------------------------------------
+# 7. H-17: histogram of the baseline coupons inside capability[metric]
+# ---------------------------------------------------------------------------
+from app.qc import coupon_histogram, sturges_bins  # noqa: E402
+
+OLD_CAPABILITY_KEYS = {
+    "sigma_hat", "lsl", "usl", "mean", "cpl", "cpu", "cp", "cpk", "reliable", "capable", "message",
+    "normality_p", "normality_warning", "target",
+}
+
+
+def known_three_metric_frame():
+    """The SPEC known-answer UTS coupons, plus small made-up porosity and dimensional columns."""
+    rows = []
+    for i, (b, vals) in enumerate(KNOWN_UTS.items()):
+        for j, v in enumerate(vals):
+            rows.append((b, f"2026-01-0{i + 1}T08:00:00", v, 0.2 + 0.01 * j, 0.01 * j))
+    return pd.DataFrame(rows, columns=["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"])
+
+
+def test_histogram_known_answer():
+    """15 coupons from SPEC section 4. Sorted: 939 943 945 945 947 948 950 951 951 952 953 955 955 957 959.
+    Sturges: ceil(log2 15) + 1 = 5 bins over 939..959, width 4: edges 939 943 947 951 955 959.
+    Bins are [a, b) except the last [a, b]: counts 1 (939), 3 (943 945 945), 3 (947 948 950),
+    4 (951 951 952 953), 4 (955 955 957 959)."""
+    h = analyze(known_three_metric_frame())["capability"]["uts_MPa"]["histogram"]
+    assert h["edges"] == pytest.approx([939, 943, 947, 951, 955, 959])
+    assert h["counts"] == [1, 3, 3, 4, 4]
+    assert sum(h["counts"]) == h["n"] == 15
+    assert h["n_builds"] == 3
+
+
+def test_histogram_function_directly():
+    values = [v for vals in KNOWN_UTS.values() for v in vals]
+    h = coupon_histogram(values, 3)
+    assert h["counts"] == [1, 3, 3, 4, 4]
+    assert len(h["edges"]) == len(h["counts"]) + 1
+
+
+def test_sturges_bin_count_with_its_limits():
+    assert sturges_bins(15) == 5      # ceil(log2 15) + 1 = 4 + 1
+    assert sturges_bins(100) == 8     # ceil(log2 100) + 1 = 7 + 1
+    assert sturges_bins(2) == 5       # 2 values would give 2 bins: raised to the minimum of 5
+    assert sturges_bins(10 ** 6) == 21
+    assert sturges_bins(2 ** 40) == 30  # 41 bins would be too many: capped at 30
+
+
+def test_histogram_constant_coupons_give_one_bin_without_nan():
+    h = coupon_histogram([950.0] * 15, 3)
+    assert h == {"edges": [950.0, 950.0], "counts": [15], "n": 15, "n_builds": 3}
+
+
+def test_histogram_with_fewer_than_two_values_is_none():
+    assert coupon_histogram([950.0], 1) is None
+    assert coupon_histogram([], 0) is None
+
+
+def test_histogram_in_analyze_constant_coupons_is_one_bin():
+    rows = [(f"B{i}", f"2026-01-0{i}T08:00:00", 950.0, 0.2, 0.0) for i in range(1, 6) for _ in range(5)]
+    df = pd.DataFrame(rows, columns=["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"])
+    h = analyze(df)["capability"]["uts_MPa"]["histogram"]
+    assert h["counts"] == [25] and h["n"] == 25 and h["n_builds"] == 5
+    json.dumps(analyze(df), allow_nan=False)  # no NaN or inf anywhere
+
+
+@pytest.mark.parametrize("name", list(SAMPLES))
+def test_histogram_counts_sum_to_the_baseline_coupons(name):
+    result = analyze(pd.read_csv(ROOT / "data" / f"{name}.csv"))
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        h = result["capability"][col]["histogram"]
+        assert sum(h["counts"]) == h["n"] == 5 * 20
+        assert h["n_builds"] == 20
+        assert len(h["edges"]) == len(h["counts"]) + 1
+        assert all(a < b for a, b in zip(h["edges"], h["edges"][1:]))  # edges strictly increase
+
+
+@pytest.mark.parametrize("name", list(SAMPLES))
+def test_histogram_with_baseline_3_uses_only_15_coupons(name):
+    df = pd.read_csv(ROOT / "data" / f"{name}.csv")
+    result = analyze(df, baseline_n=3)
+    first_three = result["build_ids"][:3]
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        h = result["capability"][col]["histogram"]
+        assert sum(h["counts"]) == h["n"] == 15 and h["n_builds"] == 3
+        vals = df[df["build_id"].astype(str).isin(first_three)][col]
+        assert h["edges"][0] == pytest.approx(vals.min())
+        assert h["edges"][-1] == pytest.approx(vals.max())
+        assert h["edges"][0] <= result["capability"][col]["mean"] <= h["edges"][-1]
+
+
+def test_capability_keys_are_the_old_keys_plus_histogram():
+    result = analyze(pd.read_csv(ROOT / "data" / "capable_baseline.csv"))
+    for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
+        assert set(result["capability"][col]) == OLD_CAPABILITY_KEYS | {"histogram"}
+        assert set(result["capability"][col]["histogram"]) == {"edges", "counts", "n", "n_builds"}

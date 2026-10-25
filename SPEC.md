@@ -121,6 +121,12 @@ Fixed for every team:
 - **What the user sees:** on one React dashboard page, after picking a test dataset or uploading a CSV:
   - a banner "Process Capable? Yes / No", with Cpl for UTS, Cpu for porosity and Cpk for
     dimensional deviation (unitless; ≥ 1.33 = capable), plus the first build where it stopped being in control;
+  - inside the banner, a closed toggle "Show the calculations and histograms": for each of the three
+    measurements the steps that give the index (process average, average range R̄, σ̂ = R̄ / 2.326, then
+    Cpl, Cpu, Cp, Cpk as they exist) with the real numbers, and a histogram of the individual coupons of the
+    baseline builds with the allowed values (dashed) and the process average (solid) drawn as lines. The API
+    sends the histogram as `capability[metric].histogram` = `{edges, counts, n, n_builds}` (Sturges bins,
+    ceil(log2 n) + 1, 5 to 30; all-equal coupons give one bin; no existing number changes);
   - X-bar and R charts for UTS (MPa) and porosity (%), with rule-breaking builds in red;
   - I-MR charts for chamber oxygen (ppm) and laser power (W), plus any other print-parameter column in the file (a file without parameter columns shows none and says the cause is not ranked);
   - a build table: build_id, RELEASE / QUARANTINE, the rule broken, and "investigate first: <parameter>".
