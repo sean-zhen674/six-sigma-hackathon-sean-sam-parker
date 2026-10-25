@@ -228,3 +228,4 @@ table.anova { min-width: 760px; }
 .verdict-found { color: var(--bad); font-weight: 700; }
 .causes-summary .summary-line.flagged { color: var(--bad); font-weight: 600; }
 .causes-summary .summary-line.clean { color: var(--ok); font-weight: 600; }
+#banner-top.tour-target { outline-offset: 6px; }

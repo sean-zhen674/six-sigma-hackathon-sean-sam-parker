@@ -34,12 +34,15 @@ describe('tour flag', () => {
     expect(s.text).toMatch(/process average/)
     expect(s.text).toMatch(/allowed values/)
   })
-  it('the possible causes step explains parallel lines and the p-value, and points at the section heading', () => {
+  it('the possible causes step explains parallel lines and the p-value, and points at the section', () => {
     const s = TOUR_STEPS[4]
-    expect(s.target).toBe('causes-h')
+    expect(s.target).toBe('causes')
     expect(s.text).toMatch(/parallel/)
     expect(s.text).toMatch(/p-value/)
     expect(s.text).toMatch(/not (prove|proof)|does not prove/)
+  })
+  it('every step points at a section of the page', () => {
+    expect(TOUR_STEPS.map((s) => s.target)).toEqual(['controls', 'banner-top', 'calc-toggle', 'charts', 'causes', 'builds'])
   })
   it('every target is the id of an element that App renders', () => {
     const files = ['App.jsx', 'Calculations.jsx', 'Causes.jsx']

@@ -8,8 +8,8 @@ import { QUALITY, TEXT } from './labels.js'
 
 export default function Calculations({ result }) {
   return (
-    <details className="calc-toggle" open>
-      <summary id="calc-toggle">{TEXT.calcToggle}</summary>
+    <details className="calc-toggle" id="calc-toggle" open>
+      <summary>{TEXT.calcToggle}</summary>
       <div className="calc-body">
         <p className="calc-intro">{TEXT.calcIntro} {TEXT.calcRounding}</p>
         {QUALITY.map((q) => {

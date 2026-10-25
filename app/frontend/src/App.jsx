@@ -170,7 +170,7 @@ export default function App() {
 
       <main>
         {narrow && (<p className="narrow-warning" role="note"><span aria-hidden="true">⚠</span> {TEXT.narrowScreen}</p>)}
-        <form className="controls" onSubmit={onSubmit} aria-label="Dataset and test parameters">
+        <form className="controls" id="controls" onSubmit={onSubmit} aria-label="Dataset and test parameters">
           <section className="card" aria-labelledby="dataset-h">
             <h2 id="dataset-h" className="card-title">{TEXT.datasetHeading}</h2>
             <div className="field">
@@ -286,6 +286,7 @@ function Summary({ result }) {
   return (
     <>
       <section className={`banner ${capable ? 'yes' : 'no'}`} aria-labelledby="banner-h">
+        <div id="banner-top">
         <h2 id="banner-h">
           <span aria-hidden="true">{capable ? '✔' : '✖'}</span>{' '}
           Process Capable? {capable ? 'Yes' : 'No'}
@@ -316,6 +317,7 @@ function Summary({ result }) {
             )
           })}
         </ul>
+        </div>
         <Calculations result={result} />
         <p className="how">
           {TEXT.howToRead.replace('{threshold}', fmt(threshold, 2))}
@@ -344,7 +346,7 @@ function ChartsSection({ result, children }) {
     : []
   const hasParams = paramNames.length > 0
   return (
-    <section aria-labelledby="charts-h">
+    <section aria-labelledby="charts-h" id="charts">
       <h2 id="charts-h" className="section-title">Control Charts</h2>
       <ul className="charts-intro">{TEXT.chartsIntro.map((t) => <li key={t}>{t}</li>)}</ul>
       {children}
@@ -427,7 +429,7 @@ function BuildTable({ builds, capable, hasParams }) {
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const rows = onlyFlagged ? builds.filter((b) => b.disposition === 'QUARANTINE') : builds
   return (
-    <section aria-labelledby="table-h">
+    <section aria-labelledby="table-h" id="builds">
       <h2 id="table-h">Builds</h2>
       <label className="toggle">
         <input type="checkbox" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} />
