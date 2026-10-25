@@ -51,10 +51,13 @@ def test_marginal_spread_is_in_control_but_one_index_is_below_the_minimum():
     assert {b["disposition"] for b in body["builds"]} == {"RELEASE"}
     assert all(set(b) == BUILD_KEYS for b in body["builds"])
     cap = body["capability"]
-    assert cap["dimensional_dev_mm"]["cpk"] == pytest.approx(1.192, abs=0.0005)
+    # 1.192 before H-18; the planted machine effect (+0.025 mm on AM-02) moves the process average to +0.0131 mm
+    assert cap["dimensional_dev_mm"]["cpk"] == pytest.approx(1.042, abs=0.0005)
+    assert cap["dimensional_dev_mm"]["cp"] == pytest.approx(1.199, abs=0.0005)  # the spread did not change
+    assert all(not any(c["flags"].values()) and not c["mr_flags"] for c in body["charts"]["imr"].values())
     assert cap["dimensional_dev_mm"]["reliable"] is True
     assert cap["dimensional_dev_mm"]["capable"] is False
-    # tensile strength and porosity are the same stream as capable_baseline: still capable
+    # tensile strength and porosity use the same random numbers as capable_baseline: still capable
     assert cap["uts_MPa"]["cpl"] == pytest.approx(4.810, abs=0.0005)
     assert cap["porosity_pct"]["cpu"] == pytest.approx(3.695, abs=0.0005)
     assert cap["uts_MPa"]["capable"] is True and cap["porosity_pct"]["capable"] is True
@@ -394,3 +397,56 @@ def test_capability_keys_through_the_api_are_the_old_keys_plus_histogram():
     body = client.get("/analyze/oxygen_drift").json()
     for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
         assert set(body["capability"][col]) == old | {"histogram"}
+
+
+# ---------------------------------------------------------------------------
+# H-18: possible causes (two-way ANOVA of machine and material lot on build averages)
+# ---------------------------------------------------------------------------
+
+def test_sample_dataset_carries_the_factors_block():
+    body = client.get("/analyze/capable_baseline").json()
+    f = body["factors"]
+    assert f["unit"] == "build average" and f["alpha"] == 0.05
+    assert (f["builds_used"], f["builds_excluded"]) == (30, 0)
+    assert f["machine_levels"] == ["AM-01", "AM-02"]
+    assert f["lot_levels"] == ["Ti64-Lot-21", "Ti64-Lot-22", "Ti64-Lot-23"]
+    assert f["notes"] and all(isinstance(n, str) for n in f["notes"])
+    assert body["settings"]["factors_missing"] == []
+    assert set(f["metrics"]) == {"uts_MPa", "porosity_pct", "dimensional_dev_mm"}
+    for m in f["metrics"].values():
+        assert set(m) == {"cells", "machine_means", "lot_means", "anova", "message"}
+        assert len(m["cells"]) == 6 and set(m["cells"][0]) == {"machine", "lot", "n_builds", "mean", "sd", "se"}
+        assert set(m["anova"]) == {"machine", "lot", "interaction", "error"}
+        assert set(m["anova"]["machine"]) == {"df", "ss", "ms", "f", "p", "significant"}
+        assert set(m["anova"]["error"]) == {"df", "ss", "ms"}
+        assert m["anova"]["error"]["df"] == 24
+        assert m["message"] is None
+
+
+def test_marginal_spread_has_the_planted_machine_effect_only_on_dimensional_deviation():
+    """+0.025 mm on every AM-02 coupon: AM-02 averages higher and the machine effect is significant
+    (p = 0.0015); lot and interaction are not. The shift size was chosen after a scan; see docs/plan.md."""
+    f = client.get("/analyze/marginal_spread").json()["factors"]
+    means = {m["level"]: m["mean"] for m in f["metrics"]["dimensional_dev_mm"]["machine_means"]}
+    assert means["AM-02"] > means["AM-01"]
+    dim = f["metrics"]["dimensional_dev_mm"]["anova"]
+    assert dim["machine"]["p"] < 0.05 and dim["machine"]["significant"] is True
+    assert dim["machine"]["p"] == pytest.approx(0.0015, abs=0.0001)
+    assert dim["lot"]["significant"] is False and dim["interaction"]["significant"] is False
+    # the other two measurements carry no planted effect: identical to capable_baseline
+    base = client.get("/analyze/capable_baseline").json()["factors"]["metrics"]
+    for metric in ("uts_MPa", "porosity_pct"):
+        assert f["metrics"][metric]["anova"] == base[metric]["anova"]
+
+
+def test_upload_without_machine_and_lot_has_no_factors():
+    df = pd.read_csv(DATA / "oxygen_drift.csv")
+    five = df[["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]]
+    body = post_csv(five.to_csv(index=False).encode()).json()
+    assert body["factors"] is None
+    assert body["settings"]["factors_missing"] == ["machine_id", "material_lot"]
+
+
+def test_full_sample_upload_equals_get_including_factors():
+    content = (DATA / "oxygen_drift.csv").read_bytes()
+    assert post_csv(content).json() == client.get("/analyze/oxygen_drift").json()

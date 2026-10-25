@@ -15,8 +15,12 @@ Input (SPEC.md section 3, docs/csv-format.md): one row per coupon, exactly 5 cou
   OPTIONAL columns: the 8 print parameters in PARAMETER_COLUMNS. Each one present gets an I-MR chart
   and joins "investigate first"; the ones absent are skipped (named in settings.parameters_missing).
   A parameter that varies within a build is averaged over that build's rows; a constant one is used as is.
-  Every other column (coupon_id, machine_id, material_lot, yield_MPa, elongation_pct, pass_fail, ...)
-  is IGNORED: it is never read, so blanks or text in it cannot cause an error.
+  OPTIONAL columns, possible causes (H-18): machine_id and material_lot (FACTOR_COLUMNS). If present, a two-way
+  ANOVA with interaction on the build averages asks whether a machine or lot is linked to a shift; a blank,
+  mixed or single-level column is skipped with a message (never an error). Absent ones are named in
+  settings.factors_missing. Quarantined builds are left out of that analysis.
+  Every other column (coupon_id, yield_MPa, elongation_pct, pass_fail, ...) is IGNORED: it is never read,
+  so blanks or text in it cannot cause an error.
 """
 import math
 import warnings as _warnings
@@ -34,6 +38,8 @@ SUBGROUP_SIZE = 5
 IMR_D2 = 1.128
 MR_D4 = 3.267
 CAPABLE_MIN = 1.33  # an index at or above this is "capable"
+ANOVA_ALPHA = 0.05  # a machine / lot / interaction effect is "significant" when p < this
+MIN_ANOVA_BUILDS = 4  # fewer builds than this cannot give a two-way analysis
 MIN_BASELINE_WARNING = 10  # fewer baseline builds than this give rough limits (the analysis adds a warning)
 
 RULE_NUMBERS = (1, 2, 3, 4, 5, 6, 7, 8)
@@ -45,7 +51,9 @@ PARAMETER_COLUMNS = [
     "laser_power_W", "scan_speed_mm_s", "layer_thickness_um", "chamber_oxygen_ppm",
     "humidity_pct", "powder_bed_temp_C", "build_plate_temp_C", "stress_relief_temp_C",
 ]
-# The columns the tool must have. The parameters are optional; any other column is ignored.
+# Optional categorical columns for the possible-causes analysis (one value per build).
+FACTOR_COLUMNS = ("machine_id", "material_lot")
+# The columns the tool must have. The parameters and factors are optional; any other column is ignored.
 REQUIRED_COLUMNS = ["build_id", "build_timestamp", "uts_MPa", "porosity_pct", "dimensional_dev_mm"]
 NUMERIC_REQUIRED = ["uts_MPa", "porosity_pct", "dimensional_dev_mm"]
 DEFAULT_SPECS = {
@@ -357,6 +365,250 @@ def rank_parameters(params_df, baseline_n=20):
 
 
 # ---------------------------------------------------------------------------
+# Possible causes: two-way ANOVA of machine and material lot (task H-18)
+# ---------------------------------------------------------------------------
+
+def _effect_coding(labels, levels):
+    """Sum-to-zero (effect) coding of a factor: one column per level except the last.
+
+    The last level is -1 in every column, so the columns sum to zero over the levels.
+    """
+    index = np.array([levels.index(v) for v in labels])
+    last = len(levels) - 1
+    return np.column_stack([(index == k).astype(float) - (index == last).astype(float) for k in range(last)])
+
+
+def _least_squares(y, blocks):
+    """Fit y = intercept + the given design blocks. Returns (residual sum of squares, rank of the design)."""
+    x = np.column_stack([np.ones(len(y))] + list(blocks))
+    beta = np.linalg.lstsq(x, y, rcond=None)[0]
+    resid = y - x @ beta
+    return float(resid @ resid), int(np.linalg.matrix_rank(x))
+
+
+def _level_means(y, labels, levels):
+    """Mean of the build averages at each level of one factor, with the number of builds."""
+    return [{"level": lv, "n_builds": int(sum(1 for v in labels if v == lv)),
+             "mean": float(np.mean([yy for yy, v in zip(y, labels) if v == lv]))} for lv in levels]
+
+
+def two_way_anova(y, machine=None, lot=None, alpha=ANOVA_ALPHA):
+    """Two-way ANOVA with interaction, Type II sums of squares, by least-squares model comparison.
+
+    y: one number per build (the build average of one measurement). machine, lot: the level of each
+    build (text), or None when that factor is absent. Model: y = mu + machine + lot + machine:lot + error.
+    Each effect is a model comparison (numpy lstsq on effect-coded design matrices):
+      machine = residual SS of (lot only) - residual SS of (machine + lot);  lot likewise;
+      interaction = residual SS of (machine + lot) - residual SS of the full model;
+      error = residual SS of the full model, df = n - rank of the full design.
+    F = MS(effect) / MSE and p = scipy.stats.f.sf(F, df effect, df error); significant means p < alpha.
+    For a balanced design (the same number of builds n in every cell) this equals the textbook formulas:
+    SSA = b*n*sum((A_i - G)^2), SSB = a*n*sum((B_j - G)^2), SSAB = n*sum((cell - A_i - B_j + G)^2),
+    SSE = sum((y - cell mean)^2), with df a-1, b-1, (a-1)(b-1) and ab(n-1).
+    With one factor only (the other None or with one level) the same code gives a one-way ANOVA.
+
+    Never returns NaN or inf. Where a number cannot be worked out (fewer than 4 builds, no replicate
+    builds, no variation, no factor with 2 levels, an empty machine-lot combination for the interaction) the
+    value is None and "message" says why. Returns
+      {"cells": [{machine, lot, n_builds, mean, sd, se}], "machine_means": [{level, n_builds, mean}] or None,
+       "lot_means": ..., "anova": {"machine", "lot", "interaction": {df, ss, ms, f, p, significant} or None,
+       "error": {df, ss, ms} or None}, "message": text or None}.
+    """
+    y = np.asarray(y, dtype=float)
+    if y.ndim != 1:
+        raise ValueError("y must be one number per build")
+    if not np.all(np.isfinite(y)):
+        raise ValueError("y contains a missing or infinite value")
+    n = len(y)
+    names = ("machine", "lot")
+    labels = {}
+    for name, given in zip(names, (machine, lot)):
+        if given is not None:
+            if len(given) != n:
+                raise ValueError(f"{name} must have one level per build ({len(given)} given for {n} builds)")
+            labels[name] = [str(v) for v in given]
+    notes = []
+    levels = {}
+    for name in names:
+        if name in labels:
+            found = sorted(set(labels[name]))
+            if len(found) < 2:
+                notes.append(f"{name} has only one level, so it cannot be tested")
+            else:
+                levels[name] = found
+    active = [name for name in names if name in levels]
+
+    out = {"cells": [], "machine_means": None, "lot_means": None,
+           "anova": {"machine": None, "lot": None, "interaction": None, "error": None}, "message": None}
+
+    def finish(extra=None):
+        parts = ([extra] if extra else []) + notes
+        out["message"] = "; ".join(parts) if parts else None
+        return out
+
+    # Descriptive part: cell means (the replicates are the builds in a cell), then each factor's means.
+    if n > 0 and active:
+        keys = sorted({tuple(labels[nm][i] if nm in levels else None for nm in names) for i in range(n)},
+                      key=lambda k: tuple("" if v is None else v for v in k))
+        for key in keys:
+            vals = [y[i] for i in range(n) if all(k is None or labels[nm][i] == k for nm, k in zip(names, key))]
+            sd = float(np.std(vals, ddof=1)) if len(vals) >= 2 else None
+            out["cells"].append({"machine": key[0], "lot": key[1], "n_builds": len(vals), "mean": float(np.mean(vals)),
+                                 "sd": sd, "se": sd / math.sqrt(len(vals)) if sd is not None else None})
+        for name in active:
+            out[f"{name}_means"] = _level_means(y, labels[name], levels[name])
+
+    if n < MIN_ANOVA_BUILDS:
+        return finish(f"need at least {MIN_ANOVA_BUILDS} builds for the analysis (got {n})")
+    if not active:
+        return finish("no factor with at least two levels, so there is nothing to test")
+    if np.ptp(y) == 0:
+        return finish("no variation: every build has the same value, so the analysis is not possible")
+    sst = float(np.sum((y - y.mean()) ** 2))
+
+    # Design blocks, and the model used for the error term.
+    block = {name: _effect_coding(labels[name], levels[name]) for name in active}
+    additive = [block[name] for name in active]
+    rss_add, rank_add = _least_squares(y, additive)
+    test_interaction = False
+    error_model = (rss_add, rank_add)
+    if len(active) == 2:
+        observed = {(labels["machine"][i], labels["lot"][i]) for i in range(n)}
+        empty = [(m, lv) for m in levels["machine"] for lv in levels["lot"] if (m, lv) not in observed]
+        if empty:
+            shown = ", ".join(f"{m} / {lv}" for m, lv in empty[:3]) + (" ..." if len(empty) > 3 else "")
+            notes.append(f"no builds in {shown}, so the machine-by-lot interaction cannot be tested "
+                         f"(the main effects are tested against the additive model)")
+        else:
+            interaction = np.column_stack([block["machine"][:, i] * block["lot"][:, j]
+                                           for i in range(block["machine"].shape[1])
+                                           for j in range(block["lot"].shape[1])])
+            error_model = _least_squares(y, additive + [interaction])
+            test_interaction = True
+    sse, rank_error = error_model
+    df_error = n - rank_error
+    if df_error <= 0:
+        return finish("no replicate builds: every combination needs at least 2 builds so the error can be "
+                      "estimated")
+    sse = max(sse, 0.0)
+    exact = sse <= 1e-12 * sst
+    if exact:
+        notes.append("the model fits the data exactly (error sum of squares is 0), so F and p cannot be worked out")
+    mse = sse / df_error
+    out["anova"]["error"] = {"df": int(df_error), "ss": sse, "ms": mse}
+
+    def effect(name, ss, df):
+        if df <= 0:
+            notes.append(f"the {name} effect cannot be separated from the other factor with these builds")
+            return None
+        ss = max(ss, 0.0)
+        entry = {"df": int(df), "ss": ss, "ms": ss / df, "f": None, "p": None, "significant": None}
+        if not exact:
+            f_value = (ss / df) / mse
+            p_value = float(stats.f.sf(f_value, df, df_error))
+            if math.isfinite(f_value) and math.isfinite(p_value):
+                entry.update(f=float(f_value), p=p_value, significant=bool(p_value < alpha))
+        return entry
+
+    for name in active:
+        other = [block[o] for o in active if o != name]
+        rss_reduced, rank_reduced = _least_squares(y, other)
+        out["anova"][name] = effect(name, rss_reduced - rss_add, rank_add - rank_reduced)
+    if test_interaction:
+        out["anova"]["interaction"] = effect("interaction", rss_add - error_model[0], error_model[1] - rank_add)
+    return finish()
+
+
+FACTOR_LABELS = {"machine_id": "machine", "material_lot": "lot"}
+
+
+def _build_factor_levels(data, column, build_ids):
+    """The level of one factor column for each build, as stripped text, in build order.
+
+    Returns (levels, None) or (None, reason). The factor is skipped (with a reason naming the first
+    build to blame) if a value is blank, if a build has more than one value, or if it has only one level.
+    """
+    key = "_factor_" + column
+    per_build = {}
+    for b, v in zip(data["build_id"], data[key]):
+        text = None if pd.isna(v) else str(v).strip()
+        per_build.setdefault(b, []).append(text or None)
+    levels = []
+    for b in build_ids:
+        values = per_build[b]
+        if any(v is None for v in values):
+            return None, f"{column} skipped: build {b} has a blank {column} value; give every coupon row a value"
+        if len(set(values)) > 1:
+            return None, (f"{column} skipped: build {b} has more than one {column} value "
+                          f"({', '.join(sorted(set(values))[:3])}); a build must have one value on all its rows")
+        levels.append(values[0])
+    if len(set(levels)) < 2:
+        return None, f"{column} skipped: it has only one level ('{levels[0]}') so it cannot be compared"
+    return levels, None
+
+
+def analyze_factors(data, df, build_ids, build_means, verdicts, alpha=ANOVA_ALPHA):
+    """The possible-causes block of analyze(): two-way ANOVA of machine and lot on build averages.
+
+    build_means: {column: one build average per build, in build order}. Builds with disposition
+    QUARANTINE are left out, so a known cause (for example an oxygen drift) is not blamed on a lot.
+    Returns None when neither factor column is in the file.
+    """
+    if all(c not in df.columns for c in FACTOR_COLUMNS):
+        return None
+    skipped, per_build = {}, {}
+    for column in FACTOR_COLUMNS:
+        if column not in df.columns:
+            continue
+        times = int((df.columns == column).sum())
+        if times > 1:
+            skipped[column] = f"{column} skipped: it appears {times} times in the header; keep only one"
+            continue
+        levels, reason = _build_factor_levels(data, column, build_ids)
+        if reason:
+            skipped[column] = reason
+        else:
+            per_build[column] = levels
+    keep = [i for i, v in enumerate(verdicts) if v != "QUARANTINE"]
+    excluded = len(build_ids) - len(keep)
+    chosen = {FACTOR_LABELS[c]: [per_build[c][i] for i in keep] for c in per_build}
+    metrics = {}
+    for col in QUALITY_COLUMNS:
+        y = [build_means[col][i] for i in keep]
+        metrics[col] = two_way_anova(y, chosen.get("machine"), chosen.get("lot"), alpha)
+
+    def used_levels(name):
+        return sorted(set(chosen[name])) if name in chosen and len(set(chosen[name])) >= 2 else []
+
+    tests = sum(1 for m in metrics.values() for k in ("machine", "lot", "interaction")
+                if m["anova"][k] is not None and m["anova"][k]["p"] is not None)
+    notes = [
+        "This shows association, not cause: a machine or lot that differs may only be linked to the real cause.",
+        "Machine and material lot were not assigned at random and usually change in blocks over time, "
+        "so they are mixed up with time (and with each other); a difference may really be a time effect.",
+        "There are only a few builds in each machine and lot combination, so the tests can miss small differences.",
+        f"Each test uses the 0.05 level and there is no correction for running several tests ({tests} here), "
+        "so about 1 false alarm in 20 tests is expected by chance.",
+        (f"{excluded} quarantined build{'s were' if excluded != 1 else ' was'} left out, so a known cause "
+         "such as a drift is not blamed on a machine or lot." if excluded
+         else "Builds that break a rule are left out of this analysis (there were none)."),
+    ]
+    if len(chosen) == 1:
+        only = next(iter(chosen))
+        notes.append(f"Only the {only} factor could be used, so a one-way analysis was done: "
+                     "no machine-by-lot interaction can be tested.")
+    message = None
+    if not (used_levels("machine") or used_levels("lot")):
+        message = ("No factor could be analysed. " + " ".join(skipped.values())).strip()
+    return {
+        "unit": "build average", "alpha": alpha,
+        "builds_used": len(keep), "builds_excluded": excluded,
+        "machine_levels": used_levels("machine"), "lot_levels": used_levels("lot"),
+        "skipped": skipped, "metrics": metrics, "notes": notes, "message": message,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -459,6 +711,9 @@ def analyze(df, specs=None, baseline_n=20):
     # Work on a copy that holds ONLY the columns the tool uses. Every other column is ignored,
     # so NaN or text in coupon_id, yield_MPa, pass_fail, ... can never raise an error.
     data = df[REQUIRED_COLUMNS + parameters_used].copy()
+    for col in FACTOR_COLUMNS:  # kept apart (never used for the charts); a duplicated header is handled later
+        if int((df.columns == col).sum()) == 1:
+            data["_factor_" + col] = df[col].to_numpy()
     for col in ["build_id", "build_timestamp"]:
         if data[col].isna().any():
             raise ValueError(f"column '{col}' has {int(data[col].isna().sum())} blank or missing values; fill them in")
@@ -584,6 +839,10 @@ def analyze(df, specs=None, baseline_n=20):
             f"few baseline builds ({n_base}): the control limits are rough, so the rules can raise false alarms; "
             f"use at least {MIN_BASELINE_WARNING} builds when you can (20 or more is best)"
         )
+    # Possible causes: two-way ANOVA of machine and lot on the build averages (quarantined builds left out).
+    factors = analyze_factors(
+        data, df, build_ids, {col: charts[col]["xbar"]["points"] for col in QUALITY_COLUMNS}, verdicts,
+    )
     first_idx = min(first_bad) if first_bad else None
     if not all_in_control:
         warnings.append("a chart is out of control: capability indices are printed but not reliable")
@@ -599,7 +858,9 @@ def analyze(df, specs=None, baseline_n=20):
             "baseline_n": baseline_n, "baseline_n_used": n_base, "subgroup_size": SUBGROUP_SIZE,
             "specs": specs, "capable_min_index": CAPABLE_MIN,
             "parameters_used": parameters_used, "parameters_missing": parameters_missing,
+            "factors_missing": [c for c in FACTOR_COLUMNS if c not in df.columns],
             "constants": {"A2": A2, "D3": D3, "D4": D4, "d2": D2, "imr_d2": IMR_D2, "mr_D4": MR_D4},
         },
+        "factors": factors,
     }
     return _clean(result)

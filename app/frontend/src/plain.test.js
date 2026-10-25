@@ -160,6 +160,10 @@ import { TEXT, QUALITY, LEGEND_RULES } from './labels.js'
 import { CHART_HELP, UNRELIABLE_TEXT, explainUploadError, summarySentence, capabilityRow } from './format.js'
 import { DATASET_TEXT, chartTitle, plainNote, explainRule, COLUMN_MEANINGS } from './plain.js'
 
+// H-19: the Possible Causes section
+import { causesTexts } from './causes.js'
+import { factorVariants } from './causes.fixture.js'
+
 // H-17: the calculation lines, verdicts and the histogram summary, built from an API-shaped answer
 import { calcBlock, blockHeading, histogramSummary } from './calc.js'
 const H17_CAP = { mean: 0.5, sigma_hat: 0.02, lsl: -0.1, usl: 0.1, cpl: 1.8, cpu: 1.7, cp: 1.75, cpk: 1.7, reliable: true, capable: true, message: null, histogram: { edges: [0, 1], counts: [3], n: 3, n_builds: 1 } }
@@ -218,6 +222,8 @@ describe('capital letter after a colon in the displayed text', () => {
   add(capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33).statusText)
   add(capabilityRow({ cpk: 1.9, reliable: true, capable: true }, 'cpk', 1.33).statusText)
   add(calcTexts())
+  // H-19: every sentence of the Possible Causes section, as it renders (also the null-factors note and the tour steps' text above)
+  for (const f of [null, ...factorVariants()]) add(causesTexts(f, QUALITY))
 
   it('has strings to scan', () => {
     expect(shown.length).toBeGreaterThan(60)

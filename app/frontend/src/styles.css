@@ -207,3 +207,24 @@ button.link-button { align-self: flex-start; background: none; border: 0; paddin
 .calc-verdict { margin: 4px 0 0; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 6px; font-weight: 700; }
 .calc-message { margin: 4px 0 0; padding: 6px 10px; background: var(--warn-bg); border: 1px solid #b54708; border-radius: 6px; color: var(--warn); font-weight: 600; }
 .histogram .chart-plot { min-width: 420px; }
+
+/* H-19: tour steps that point at a part of the page, and the Possible Causes section */
+.tour-backdrop.docked { align-items: flex-end; background: rgba(15, 23, 42, 0.12); }
+.tour-target { outline: 4px solid #f59e0b; outline-offset: 4px; scroll-margin-top: 12px; border-radius: 4px; }
+.row-status.untested { color: var(--muted); }
+button.link-button.inline { display: inline; padding: 0; }
+.causes-intro { margin: 0 0 8px; }
+.read-first { margin: 8px 0 12px; padding: 8px 12px; background: var(--warn-bg); border: 1px solid #b54708; border-left-width: 6px; border-radius: 6px; color: var(--ink); }
+.read-first p { margin: 0; }
+.read-first ul, .param-note ul { margin: 4px 0 0; padding-left: 1.25rem; }
+.read-first li { margin: 2px 0; overflow-wrap: anywhere; }
+.interaction-plot { margin-bottom: 12px; }
+.plot-key { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 0; padding: 0; font-weight: 600; }
+.plot-key li { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.causes-summary { margin: 8px 0; }
+.causes-summary p { margin: 2px 0; }
+.anova-wrap { max-height: none; }
+table.anova { min-width: 760px; }
+.verdict-found { color: var(--bad); font-weight: 700; }
+.causes-summary .summary-line.flagged { color: var(--bad); font-weight: 600; }
+.causes-summary .summary-line.clean { color: var(--ok); font-weight: 600; }

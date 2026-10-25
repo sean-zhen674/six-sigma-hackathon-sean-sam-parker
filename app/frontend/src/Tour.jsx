@@ -18,6 +18,17 @@ export default function Tour({ onClose }) {
     }
   }, [])
 
+  // A step with a target scrolls that part of the page into view and outlines it. The window then
+  // sits at the bottom of the screen, so the highlighted part stays visible above it. If the part
+  // is not on the page (no results yet), the step just shows its text.
+  const target = s.target ? document.getElementById(s.target) : null
+  useEffect(() => {
+    if (!target) return undefined
+    target.classList.add('tour-target')
+    target.scrollIntoView({ block: 'start' })
+    return () => target.classList.remove('tour-target')
+  }, [target])
+
   function onKeyDown(e) {
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -39,7 +50,7 @@ export default function Tour({ onClose }) {
   }
 
   return (
-    <div className="tour-backdrop">
+    <div className={`tour-backdrop${target ? ' docked' : ''}`}>
       <div
         ref={box}
         className="tour"

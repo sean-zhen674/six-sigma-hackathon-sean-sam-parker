@@ -55,10 +55,30 @@ If the value changes between rows (for example you pasted raw layer-log values),
 A parameter that never changes in the first 20 builds cannot be charted (there is no spread to
 measure). The tool skips it and tells you.
 
-## 4. Extra columns are ignored
+## 4. Optional machine and lot columns, and other extra columns
 
-Keep `coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes,
-or anything else if it is useful to you. The tool never reads them. A blank cell or text in an
+**Possible causes (optional).** Two text columns, `machine_id` (for example `AM-01`) and `material_lot`
+(for example `Ti64-Lot-21`), let the tool ask whether a shift in the measurements is linked to a machine
+or a powder lot, and whether the two interact (a two-way analysis of variance, ANOVA). Rules:
+
+- **One value per build.** All 5 coupon rows of a build must show the same machine and the same lot.
+  If a build has two different values, or a blank cell, that column is skipped and the answer
+  (`factors.skipped` in the API) names the first build to fix. This never stops the rest of the analysis.
+- **Levels are read as text with spaces trimmed**, so `AM-01` and ` AM-01 ` are the same machine.
+  Capital letters matter (`am-01` is a different level).
+- **At least 2 different levels** are needed in a column, otherwise there is nothing to compare and it is skipped.
+- You can give only one of the two columns; the tool then does a one-way analysis (no interaction).
+  With neither column, this analysis is left out and `settings.factors_missing` names both.
+- **The unit is the build average.** Each build counts once (the average of its 5 coupons), because machine
+  and lot are set per build. Builds that broke a rule (QUARANTINE in the build table) are **left out**, so a
+  known cause such as an oxygen drift is not blamed on a lot or machine.
+- At least 4 builds are needed, and the combinations need some replicate builds (about 5 per combination
+  is a good aim); otherwise the answer is empty with a message.
+- It shows **association, not cause**. If machines or lots change in blocks over time (as in the sample
+  files) they are mixed up with time, and a difference may be a time effect.
+
+**Other extra columns are ignored.** Keep `coupon_id`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes,
+or anything else if it is useful to you. The tool never reads them. A blank cell or text in such an
 extra column causes no error. (The three sample files in `data/` contain such columns; that is why
 they have 19 columns.)
 

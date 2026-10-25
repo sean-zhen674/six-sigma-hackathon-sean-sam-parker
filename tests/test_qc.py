@@ -12,6 +12,7 @@ import pytest
 from app.qc import (
     analyze,
     capability,
+    two_way_anova,
     disposition,
     imr,
     nelson,
@@ -392,7 +393,6 @@ def test_ignored_columns_may_hold_nan_or_junk():
     df = synthetic()
     df.loc[0, "yield_MPa"] = np.nan
     df.loc[1, "pass_fail"] = np.nan
-    df.loc[2, "machine_id"] = np.nan
     df["coupon_id"] = "text, with, commas"
     df["notes"] = [None if i % 2 else "free text" for i in range(len(df))]
     df["junk_numbers"] = 1.0
@@ -478,8 +478,9 @@ SAMPLES = {
     # name: (process_capable, first out of control, top suspect, Cpl uts, Cpu porosity, Cpk dimensional)
     "capable_baseline": (True, None, None, 4.810, 3.695, 1.792),
     "oxygen_drift": (False, "B-1023", "chamber_oxygen_ppm", 4.635, 3.511, 1.416),
-    # H-14: in control, only the dimensional Cpk (1.192) is below 1.33
-    "marginal_spread": (False, None, None, 4.810, 3.695, 1.192),
+    # H-14: in control, only the dimensional Cpk is below 1.33 (1.192 until H-18 planted the machine
+    # effect, which moves X-bar-bar to +0.0131 mm and Cpk to 1.042; Cp stays 1.199)
+    "marginal_spread": (False, None, None, 4.810, 3.695, 1.042),
 }
 
 
@@ -705,3 +706,308 @@ def test_capability_keys_are_the_old_keys_plus_histogram():
     for col in ("uts_MPa", "porosity_pct", "dimensional_dev_mm"):
         assert set(result["capability"][col]) == OLD_CAPABILITY_KEYS | {"histogram"}
         assert set(result["capability"][col]["histogram"]) == {"edges", "counts", "n", "n_builds"}
+
+
+# ---------------------------------------------------------------------------
+# 7. H-18: two-way ANOVA of machine and material lot (on build averages, Type II)
+# ---------------------------------------------------------------------------
+import math  # noqa: E402
+
+from scipy import stats as sp_stats  # noqa: E402
+
+METRICS = ["uts_MPa", "porosity_pct", "dimensional_dev_mm"]
+
+
+def test_two_way_anova_hand_computed_known_answer():
+    """2 x 2 design, 2 replicate builds per cell, worked by hand.
+
+    Cell values:        lot B1        lot B2
+      machine A1      10, 12        14, 18
+      machine A2      20, 24        19, 25
+    Cell means 11, 16, 22, 22. Grand mean 17.75. Machine means A1 13.5, A2 22. Lot means B1 16.5, B2 19.
+    SSA  = b*n * sum (A_i - G)^2   = 4 * (4.25^2 + 4.25^2) = 144.5          df 1
+    SSB  = a*n * sum (B_j - G)^2   = 4 * (1.25^2 + 1.25^2) = 12.5           df 1
+    SSAB = n * sum (cell - A_i - B_j + G)^2 = 2 * 4 * 1.25^2 = 12.5         df 1
+    SSE  = (1+1) + (4+4) + (4+4) + (9+9) = 36                               df 4, MSE = 9
+    F_A = 144.5 / 9 = 16.05556, F_B = F_AB = 12.5 / 9 = 1.38889.
+    p-values (F with 1 and 4 df, upper tail, integrated numerically from the F density,
+    not with scipy.stats.f.sf): 0.016037323224959904 and 0.303912165140354.
+    """
+    y = [10, 12, 14, 18, 20, 24, 19, 25]
+    machine = ["A1", "A1", "A1", "A1", "A2", "A2", "A2", "A2"]
+    lot = ["B1", "B1", "B2", "B2", "B1", "B1", "B2", "B2"]
+    r = two_way_anova(y, machine, lot)
+    a = r["anova"]
+    assert r["message"] is None
+    assert a["machine"]["df"] == 1 and a["lot"]["df"] == 1 and a["interaction"]["df"] == 1 and a["error"]["df"] == 4
+    assert a["machine"]["ss"] == pytest.approx(144.5, abs=1e-9)
+    assert a["lot"]["ss"] == pytest.approx(12.5, abs=1e-9)
+    assert a["interaction"]["ss"] == pytest.approx(12.5, abs=1e-9)
+    assert a["error"]["ss"] == pytest.approx(36.0, abs=1e-9)
+    assert a["error"]["ms"] == pytest.approx(9.0, abs=1e-9)
+    assert a["machine"]["f"] == pytest.approx(144.5 / 9, abs=1e-9)
+    assert a["lot"]["f"] == pytest.approx(12.5 / 9, abs=1e-9)
+    assert a["interaction"]["f"] == pytest.approx(12.5 / 9, abs=1e-9)
+    assert a["machine"]["p"] == pytest.approx(0.016037323224959904, abs=1e-9)
+    assert a["lot"]["p"] == pytest.approx(0.303912165140354, abs=1e-9)
+    assert a["interaction"]["p"] == pytest.approx(0.303912165140354, abs=1e-9)
+    assert a["machine"]["significant"] is True and a["lot"]["significant"] is False
+    assert a["interaction"]["significant"] is False
+    cells = {(c["machine"], c["lot"]): c for c in r["cells"]}
+    assert cells[("A1", "B1")]["mean"] == pytest.approx(11.0) and cells[("A1", "B1")]["n_builds"] == 2
+    assert cells[("A1", "B1")]["sd"] == pytest.approx(math.sqrt(2.0))      # sd of 10, 12
+    assert cells[("A1", "B1")]["se"] == pytest.approx(1.0)                 # sd / sqrt(2)
+    assert cells[("A2", "B2")]["mean"] == pytest.approx(22.0)
+    assert {m["level"]: m["mean"] for m in r["machine_means"]} == pytest.approx({"A1": 13.5, "A2": 22.0})
+    assert {m["level"]: m["mean"] for m in r["lot_means"]} == pytest.approx({"B1": 16.5, "B2": 19.0})
+    assert {m["level"]: m["n_builds"] for m in r["machine_means"]} == {"A1": 4, "A2": 4}
+    json.dumps(r, allow_nan=False)
+
+
+def sample_build_table(name):
+    """The coupon rows of a sample file, and its build averages plus machine and lot (one row per build)."""
+    df = pd.read_csv(ROOT / "data" / f"{name}.csv")
+    g = df.groupby("build_id", sort=False)
+    table = g[METRICS].mean()
+    table["machine"] = g["machine_id"].first()
+    table["lot"] = g["material_lot"].first()
+    return df, table
+
+
+def classical_balanced(y, a_lab, b_lab):
+    """Textbook balanced two-way ANOVA with plain numpy (SSA, SSB, SSAB, SSE and df)."""
+    a_levels, b_levels = sorted(set(a_lab)), sorted(set(b_lab))
+    a, b = len(a_levels), len(b_levels)
+    y, a_lab, b_lab = np.asarray(y, float), np.asarray(a_lab), np.asarray(b_lab)
+    n = int(((a_lab == a_levels[0]) & (b_lab == b_levels[0])).sum())
+    cell = np.array([[y[(a_lab == i) & (b_lab == j)].mean() for j in b_levels] for i in a_levels])
+    g = y.mean()
+    a_mean, b_mean = cell.mean(axis=1), cell.mean(axis=0)
+    ssa = b * n * np.sum((a_mean - g) ** 2)
+    ssb = a * n * np.sum((b_mean - g) ** 2)
+    ssab = n * np.sum((cell - a_mean[:, None] - b_mean[None, :] + g) ** 2)
+    sse = sum(np.sum((y[(a_lab == i) & (b_lab == j)] - cell[ii, jj]) ** 2)
+              for ii, i in enumerate(a_levels) for jj, j in enumerate(b_levels))
+    return {"ssa": ssa, "ssb": ssb, "ssab": ssab, "sse": sse,
+            "dfa": a - 1, "dfb": b - 1, "dfab": (a - 1) * (b - 1), "dfe": a * b * (n - 1)}
+
+
+@pytest.mark.parametrize("name", ["capable_baseline", "marginal_spread"])
+def test_type2_equals_classical_formulas_on_the_balanced_sample_layout(name):
+    """30 builds, machine (2 levels) x lot (3 levels), 5 builds in every cell: Type II = textbook ANOVA."""
+    df, table = sample_build_table(name)
+    result = analyze(df)
+    fac = result["factors"]
+    assert fac["builds_used"] == 30 and fac["builds_excluded"] == 0
+    assert fac["machine_levels"] == ["AM-01", "AM-02"]
+    assert fac["lot_levels"] == ["Ti64-Lot-21", "Ti64-Lot-22", "Ti64-Lot-23"]
+    for metric in METRICS:
+        c = classical_balanced(table[metric], table["machine"], table["lot"])
+        a = fac["metrics"][metric]["anova"]
+        assert (a["machine"]["df"], a["lot"]["df"], a["interaction"]["df"], a["error"]["df"]) == (
+            c["dfa"], c["dfb"], c["dfab"], c["dfe"]) == (1, 2, 2, 24)
+        for key, ss, df_ in (("machine", c["ssa"], c["dfa"]), ("lot", c["ssb"], c["dfb"]),
+                             ("interaction", c["ssab"], c["dfab"])):
+            assert a[key]["ss"] == pytest.approx(ss, rel=1e-9, abs=1e-12)
+            f = (ss / df_) / (c["sse"] / c["dfe"])
+            assert a[key]["f"] == pytest.approx(f, rel=1e-9)
+            assert a[key]["p"] == pytest.approx(sp_stats.f.sf(f, df_, c["dfe"]), rel=1e-9, abs=1e-12)
+            assert a[key]["significant"] is bool(a[key]["p"] < 0.05)
+        assert a["error"]["ss"] == pytest.approx(c["sse"], rel=1e-9)
+        assert a["error"]["ms"] == pytest.approx(c["sse"] / c["dfe"], rel=1e-9)
+        assert len(fac["metrics"][metric]["cells"]) == 6
+        assert all(cell["n_builds"] == 5 for cell in fac["metrics"][metric]["cells"])
+
+
+def test_lot_only_is_a_one_way_anova_equal_to_f_oneway():
+    df, table = sample_build_table("capable_baseline")
+    result = analyze(df.drop(columns=["machine_id"]))
+    assert result["settings"]["factors_missing"] == ["machine_id"]
+    fac = result["factors"]
+    assert fac["machine_levels"] == []
+    assert any("one-way" in note for note in fac["notes"])
+    for metric in METRICS:
+        groups = [table.loc[table["lot"] == lot, metric].to_numpy() for lot in sorted(table["lot"].unique())]
+        expected = sp_stats.f_oneway(*groups)
+        a = fac["metrics"][metric]["anova"]
+        assert a["machine"] is None and a["interaction"] is None
+        assert a["lot"]["f"] == pytest.approx(expected.statistic, rel=1e-9)
+        assert a["lot"]["p"] == pytest.approx(expected.pvalue, rel=1e-9)
+        assert (a["lot"]["df"], a["error"]["df"]) == (2, 27)
+
+
+def test_unbalanced_main_effects_equal_an_independent_model_comparison():
+    """Drop two builds from different cells: Type II = (residual SS without the factor) - (with it)."""
+    df, _ = sample_build_table("capable_baseline")
+    df = df[~df["build_id"].isin(["B-1002", "B-1013"])]
+    result = analyze(df)
+    fac = result["factors"]
+    assert fac["builds_used"] == 28 and fac["builds_excluded"] == 0
+    g = df.groupby("build_id", sort=False)
+    table = g[METRICS].mean()
+    mach = g["machine_id"].first().to_numpy()
+    lots = g["material_lot"].first().to_numpy()
+
+    def rss(y, columns):  # dummy-coded least squares; any full-rank coding gives the same residuals
+        x = np.column_stack([np.ones(len(y))] + columns)
+        beta = np.linalg.lstsq(x, y, rcond=None)[0]
+        return float(np.sum((y - x @ beta) ** 2))
+
+    m_cols = [(mach == "AM-02").astype(float)]
+    l_cols = [(lots == lv).astype(float) for lv in ("Ti64-Lot-22", "Ti64-Lot-23")]
+    cells = [(mach == m) & (lots == lv) for m in ("AM-01", "AM-02") for lv in sorted(set(lots))]
+    full_cols = [c.astype(float) for c in cells[1:]]
+    for metric in METRICS:
+        y = table[metric].to_numpy()
+        rss_full, rss_add = rss(y, full_cols), rss(y, m_cols + l_cols)
+        ss_m = rss(y, l_cols) - rss_add
+        ss_l = rss(y, m_cols) - rss_add
+        ss_i = rss_add - rss_full
+        dfe = 28 - 6
+        a = fac["metrics"][metric]["anova"]
+        assert a["error"]["df"] == dfe
+        assert a["machine"]["ss"] == pytest.approx(ss_m, rel=1e-8, abs=1e-12)
+        assert a["lot"]["ss"] == pytest.approx(ss_l, rel=1e-8, abs=1e-12)
+        assert a["interaction"]["ss"] == pytest.approx(ss_i, rel=1e-8, abs=1e-12)
+        assert a["machine"]["f"] == pytest.approx((ss_m / 1) / (rss_full / dfe), rel=1e-8)
+        assert a["lot"]["f"] == pytest.approx((ss_l / 2) / (rss_full / dfe), rel=1e-8)
+        assert a["lot"]["p"] == pytest.approx(sp_stats.f.sf((ss_l / 2) / (rss_full / dfe), 2, dfe), rel=1e-8)
+
+
+def test_quarantined_builds_are_left_out_of_the_anova():
+    df, _ = sample_build_table("oxygen_drift")
+    result = analyze(df)
+    quarantined = [b["build_id"] for b in result["builds"] if b["disposition"] == "QUARANTINE"]
+    assert len(quarantined) > 0
+    fac = result["factors"]
+    assert fac["builds_excluded"] == len(quarantined)
+    assert fac["builds_used"] == 30 - len(quarantined)
+    assert sum(c["n_builds"] for c in fac["metrics"]["uts_MPa"]["cells"]) == fac["builds_used"]
+    assert any("left out" in note for note in fac["notes"])
+
+
+# --- degenerate cases: None plus a message, never NaN or inf ---------------------------------
+
+BALANCED_M = ["A", "A", "A", "A", "B", "B", "B", "B"]
+BALANCED_L = ["x", "x", "y", "y", "x", "x", "y", "y"]
+
+
+def test_anova_constant_response_gives_none_and_a_message():
+    r = two_way_anova([5.0] * 8, BALANCED_M, BALANCED_L)
+    assert r["message"] and "no variation" in r["message"]
+    for key in ("machine", "lot", "interaction"):
+        assert r["anova"][key] is None
+    json.dumps(r, allow_nan=False)
+
+
+def test_anova_zero_error_sum_of_squares_gives_none_f_and_p():
+    # every cell is constant: the error sum of squares is 0, so F would be infinite
+    r = two_way_anova([1, 1, 2, 2, 3, 3, 5, 5], BALANCED_M, BALANCED_L)
+    assert r["message"] and "exactly" in r["message"]
+    for key in ("machine", "lot", "interaction"):
+        assert r["anova"][key]["f"] is None and r["anova"][key]["p"] is None
+        assert r["anova"][key]["significant"] is None
+    json.dumps(r, allow_nan=False)
+
+
+def test_anova_single_level_factor_is_skipped():
+    r = two_way_anova([1, 2, 3, 4, 5, 6, 7, 9], ["A"] * 8, BALANCED_L)
+    assert r["anova"]["machine"] is None and r["anova"]["interaction"] is None
+    assert r["anova"]["lot"]["df"] == 1
+    assert "one level" in r["message"]
+    # both factors have one level: nothing to test
+    r2 = two_way_anova([1, 2, 3, 4, 5, 6, 7, 9], ["A"] * 8, ["x"] * 8)
+    assert r2["anova"]["lot"] is None and r2["anova"]["machine"] is None and r2["message"]
+    json.dumps(r, allow_nan=False)
+    json.dumps(r2, allow_nan=False)
+
+
+def test_anova_empty_cell_skips_the_interaction_but_tests_the_main_effects():
+    # no builds at all in cell (B, y)
+    y = [10, 12, 14, 18, 20, 24, 21, 23, 25]
+    machine = ["A", "A", "A", "A", "B", "B", "B", "B", "B"]
+    lot = ["x", "x", "y", "y", "x", "x", "x", "x", "x"]
+    r = two_way_anova(y, machine, lot)
+    assert r["anova"]["interaction"] is None
+    assert "no builds" in r["message"] and "interaction" in r["message"]
+    assert r["anova"]["machine"]["df"] == 1 and r["anova"]["lot"]["df"] == 1
+    assert r["anova"]["error"]["df"] == 9 - 3  # the additive model has 3 parameters
+    json.dumps(r, allow_nan=False)
+
+
+def test_anova_too_few_builds_gives_none_and_a_message():
+    r = two_way_anova([1.0, 2.0, 3.0], ["A", "A", "B"], ["x", "y", "x"])
+    assert r["anova"]["machine"] is None and r["anova"]["lot"] is None
+    assert r["message"] and "at least 4" in r["message"]
+    json.dumps(r, allow_nan=False)
+
+
+def test_anova_without_replicates_has_no_error_term():
+    # 2 x 2 with one build per cell: 4 builds but 0 error degrees of freedom
+    r = two_way_anova([1.0, 2.0, 4.0, 8.0], ["A", "A", "B", "B"], ["x", "y", "x", "y"])
+    assert r["anova"]["machine"] is None and r["anova"]["error"] is None
+    assert "replicate" in r["message"]
+    json.dumps(r, allow_nan=False)
+
+
+def test_anova_without_any_factor_gives_a_message():
+    r = two_way_anova([1.0, 2.0, 3.0, 4.0, 5.0], None, None)
+    assert r["message"] and r["anova"]["lot"] is None
+    json.dumps(r, allow_nan=False)
+
+
+def test_analyze_without_machine_and_lot_columns_has_no_factors():
+    result = analyze(minimal_frame())
+    assert result["factors"] is None
+    assert result["settings"]["factors_missing"] == ["machine_id", "material_lot"]
+
+
+def test_analyze_mixed_values_within_a_build_skip_that_factor_with_a_warning():
+    df, _ = sample_build_table("capable_baseline")
+    df.loc[df.index[7], "machine_id"] = "AM-02"  # build B-1002 now has two machines
+    result = analyze(df)
+    fac = result["factors"]
+    assert "B-1002" in fac["skipped"]["machine_id"]
+    assert fac["machine_levels"] == []
+    assert fac["metrics"]["uts_MPa"]["anova"]["machine"] is None
+    assert fac["metrics"]["uts_MPa"]["anova"]["lot"]["df"] == 2   # lot is still analysed (one-way)
+    json.dumps(result, allow_nan=False)
+
+
+def test_analyze_blank_factor_value_skips_that_factor_with_a_warning():
+    df, _ = sample_build_table("capable_baseline")
+    df.loc[df.index[0], "material_lot"] = np.nan
+    df.loc[df.index[6], "machine_id"] = "   "
+    result = analyze(df)
+    fac = result["factors"]
+    assert "B-1001" in fac["skipped"]["material_lot"] and "blank" in fac["skipped"]["material_lot"]
+    assert "B-1002" in fac["skipped"]["machine_id"] and "blank" in fac["skipped"]["machine_id"]
+    assert fac["metrics"]["uts_MPa"]["anova"]["lot"] is None
+    assert fac["message"]
+    json.dumps(result, allow_nan=False)
+
+
+def test_analyze_single_level_factor_columns_are_skipped_with_a_message():
+    fac = analyze(synthetic())["factors"]  # machine_id is always M1, material_lot always L1
+    assert set(fac["skipped"]) == {"machine_id", "material_lot"}
+    assert "one level" in fac["skipped"]["machine_id"]
+    assert fac["message"]
+
+
+def test_factor_levels_are_read_as_stripped_text():
+    df, _ = sample_build_table("capable_baseline")
+    spaced = df.copy()
+    spaced["machine_id"] = " " + spaced["machine_id"] + " "
+    assert analyze(spaced)["factors"] == analyze(df)["factors"]
+
+
+def test_result_keys_are_only_added_never_changed():
+    df, _ = sample_build_table("capable_baseline")
+    result = analyze(df)
+    assert set(result) == {"build_ids", "charts", "capability", "process_capable", "first_out_of_control_build",
+                           "builds", "warnings", "settings", "factors"}
+    assert result["settings"]["factors_missing"] == []
+    assert set(result["factors"]) >= {"unit", "alpha", "builds_used", "builds_excluded", "machine_levels",
+                                      "lot_levels", "metrics", "notes", "skipped", "message"}
+    assert result["factors"]["unit"] == "build average" and result["factors"]["alpha"] == 0.05
+    json.dumps(result, allow_nan=False)

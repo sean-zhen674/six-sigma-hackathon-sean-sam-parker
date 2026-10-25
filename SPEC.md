@@ -40,7 +40,8 @@ cannot measure costs points.
 |---|---|---|
 | ONE CSV, one row per coupon, exactly 5 coupons per build. **5 required columns:** `build_id`, `build_timestamp`, `uts_MPa`, `porosity_pct`, `dimensional_dev_mm` | text ID, ISO 8601 time; MPa, %, mm | the coupon test lab's report (LIMS export) and the build record |
 | **8 optional print-parameter columns** (the same value on all 5 coupon rows, or raw values that the tool averages per build): `laser_power_W`, `scan_speed_mm_s`, `layer_thickness_um`, `chamber_oxygen_ppm`, `humidity_pct`, `powder_bed_temp_C`, `build_plate_temp_C` (each the mean over the build's layer log), `stress_relief_temp_C` (post-process). Each one present gets an I-MR chart and joins "investigate first"; absent ones are skipped and named in `settings.parameters_missing` | W, mm/s, µm, ppm, %, °C | the printer's layer log averaged per build, and the heat-treat furnace record, joined on `build_id` |
-| Any other column (`coupon_id`, `machine_id`, `material_lot`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes, ...) | anything | **ignored**: never read, so blanks or text in it cannot cause an error. The three sample files keep these as realistic extras |
+| **2 optional categorical columns** `machine_id` and `material_lot` (one value per build, the same on its 5 coupon rows; read as text with spaces trimmed) | text | the printer and powder-lot records, joined on `build_id`. Used for the possible-causes analysis (section 4). A blank, mixed-within-a-build or single-level column is skipped with a message (`factors.skipped`), never an error; absent ones are named in `settings.factors_missing` |
+| Any other column (`coupon_id`, `yield_MPa`, `elongation_pct`, `pass_fail`, notes, ...) | anything | **ignored**: never read, so blanks or text in it cannot cause an error. The three sample files keep these as realistic extras |
 | Baseline builds (default 20, minimum 3; a note appears below 10 builds because the limits are then rough) | whole number of builds | the user's judgement of how many early builds were normal; the default works for most files |
 | Spec limits (defaults built in, user can edit) | UTS LSL 900 MPa (target 950); porosity USL 0.5 % (target 0.2); dimensional deviation ±0.10 mm | the client's purchase spec / drawing |
 
@@ -71,6 +72,17 @@ Say the method in words before any code exists. Load the `stats-first-steering` 
   otherwise RELEASE.
   **Investigate first:** for a flagged build, list the build parameters whose I-MR chart breaks a rule
   at that build, ranked by |z| = |x − CL| / σ̂ (largest first).
+  **Possible causes (H-18):** is a shift in the quality linked to a machine or a material lot, and do the
+  two interact? A **two-way ANOVA with interaction** on the build averages of each measurement:
+  y = μ + machine + lot + machine:lot + error, one number per build (the mean of its 5 coupons), because
+  machine and lot are set per build, so the builds in a machine-lot combination are the replicates.
+  Sums of squares are **Type II**, computed by least-squares model comparison (the machine effect is the extra
+  residual sum of squares when machine is dropped from the machine + lot model, likewise for lot; the
+  interaction is the full model against the additive one). For a balanced layout this is the textbook
+  SSA = b·n·Σ(Āᵢ − G)², SSB = a·n·Σ(B̄ⱼ − G)², SSAB = n·Σ(cell − Āᵢ − B̄ⱼ + G)², SSE = Σ(y − cell mean)²,
+  with df a−1, b−1, (a−1)(b−1), ab(n−1). F = MS(effect) / MSE; p from the F distribution
+  (`scipy.stats.f.sf`); "significant" means p < α = 0.05. **Builds that broke a rule (QUARANTINE) are left
+  out**, so a known cause such as the oxygen drift is not blamed on a lot. With one factor only it is a one-way ANOVA.
 - **Why it fits the use case:** the 5 coupons per build are a natural rational subgroup, so X-bar/R
   separates build-to-build shifts from within-build scatter, and Cpl/Cpu answer the client's one-sided
   "at least 900 MPa" and "at most 0.5 % porosity" requirements directly.
@@ -79,7 +91,15 @@ Say the method in words before any code exists. Load the `stats-first-steering` 
   roughly normal: a Shapiro-Wilk test on the baseline coupons is reported, and porosity (bounded at
   0, often right-skewed) carries a warning that its Cpu is approximate; (3) the baseline builds are in
   control: limits are computed on the baseline only and the baseline's own violations are shown;
-  (4) builds are independent and in time order (sorted by `build_timestamp`).
+  (4) builds are independent and in time order (sorted by `build_timestamp`);
+  (5) possible causes: build averages are roughly normal with equal spread in every machine-lot
+  combination; the **sample files are balanced** (2 machines × 3 lots, 5 builds in every combination, so
+  Type II equals the classic formulas), but **machine and lot are confounded with time** (machine changes in
+  blocks of 5 builds, lot in blocks of 10; nothing was randomised), so a difference may be a time effect;
+  the result is an association, not a cause; α = 0.05 for each test and **no multiplicity correction**
+  (3 measurements × 3 tests = 9 tests, so about one false alarm in 20 is expected by chance); the answer is
+  None plus a message when it cannot be worked out (fewer than 4 builds, no replicate builds, no variation,
+  a single-level factor, an empty combination for the interaction), never NaN or inf.
 - **Known-answer check:** hand calculation, 3 builds of 5 UTS coupons (MPa):
   B1 = 945, 952, 950, 948, 955; B2 = 951, 953, 955, 957, 959; B3 = 939, 951, 945, 947, 943.
   Means 950, 955, 945 → X̿ = 2850 / 3 = **950.0**. Ranges 10, 8, 12 → R̄ = 30 / 3 = **10.0**.
@@ -121,7 +141,7 @@ Fixed for every team:
 - **What the user sees:** on one React dashboard page, after picking a test dataset or uploading a CSV:
   - a banner "Process Capable? Yes / No", with Cpl for UTS, Cpu for porosity and Cpk for
     dimensional deviation (unitless; ≥ 1.33 = capable), plus the first build where it stopped being in control;
-  - inside the banner, a closed toggle "Show the calculations and histograms": for each of the three
+  - inside the banner, a toggle (open by default) "Show the calculations and histograms": for each of the three
     measurements the steps that give the index (process average, average range R̄, σ̂ = R̄ / 2.326, then
     Cpl, Cpu, Cp, Cpk as they exist) with the real numbers, and a histogram of the individual coupons of the
     baseline builds with the allowed values (dashed) and the process average (solid) drawn as lines. The API
@@ -134,6 +154,29 @@ Fixed for every team:
     as NOT RELEASED (QUARANTINE stays QUARANTINE).
   How to read this: "A red point means that build behaved differently from the baseline builds;
   an index of 1.33 or more means the process meets spec with margin, and only counts while the chart is in control."
+  - possible causes (API: `factors`): per measurement the cell means (machine × lot), the machine and lot means
+    and the ANOVA table (df, sums of squares, mean squares, F, p, significant for machine, lot and interaction,
+    plus error), `builds_used` and `builds_excluded` (quarantined), `skipped` (a factor column that could not be
+    used and why) and plain-sentence `notes` with the standing caveats (association not cause, mixed up with
+    time, few builds per combination, 9 tests so one false alarm in 20, quarantined builds left out). `null`
+    when the file has neither column.
+  - the dashboard section "Possible Causes by Machine and Material Lot" (H-19), between the Control Charts and
+    the Builds table: two intro sentences (build averages are compared; quarantined builds are left out), a
+    "Read this first" list built from `notes` with "Association, not cause." on top, the `skipped` reasons, then
+    one drop-down per measurement with a status ("Difference found" in red when any ANOVA effect has
+    `significant` true, else "No difference found" in green, or "Not tested"; only the measurement with a
+    significant effect opens, else the first). Inside: an interaction plot (one line per machine across the
+    material lots, distinct marker shapes and dashes, a direct label at each line end, bars of one standard
+    error, hover or tap tooltip, a hidden table of the cell means for screen readers; with one factor a single
+    line), a plain sentence (for example "Machine AM-02 averages higher than AM-01 by 0.0176 mm (p-value
+    0.0015).", which only subtracts two means the API sent), and the ANOVA table with a verdict from the API
+    `significant` flag ("Likely a real difference", "No evidence of a difference" or "Not tested"). Without the
+    two columns the section shows one short note and a link to the file-format window. The page computes no
+    statistic.
+  - the guided tour ("Take the tour") has 6 steps; H-19 added "See the calculations" (the toggle in the Process
+    Capable box: process average and allowed values on the histograms) and "Look for possible causes" (parallel
+    lines mean no interaction; a small p-value means a likely real difference, not proof of cause). A step with a
+    target scrolls to it and outlines it.
   The same numbers come back as JSON from the API.
 
 ## 7. Test datasets and codebook (rubric: demo 10, datasets 5, codebook 5)
@@ -144,7 +187,11 @@ collect this data for real.
   `capable_baseline.csv` (in control, Cpl and Cpu ≥ 1.33); `oxygen_drift.csv` (chamber oxygen creeps up
   from build 21, so UTS falls and porosity rises, flagged by rules 2/3 before parts fail spec);
   `marginal_spread.csv` (in control on every build, but the dimensional spread is wide, so Cpk is
-  about 1.19, below 1.33: not capable). The seed and generator script are recorded in `data/README.md`.
+  about 1.04, below 1.33: not capable; it also carries a PLANTED machine effect, a constant +0.025 mm on the
+  dimensional deviation of every coupon printed on machine AM-02, disclosed here and in `data/README.md` (the size was chosen after a scan, only to be large enough to detect with 5 builds per combination while raising no control chart alarm), so
+  the possible-causes analysis has something to find). In all three files `machine_id` alternates AM-01 /
+  AM-02 in blocks of 5 builds and `material_lot` changes every 10 builds (Ti64-Lot-21, -22, -23), so every
+  combination has 5 builds. The seed and generator script are recorded in `data/README.md`.
 
 ## 8. Documentation and reproducibility (rubric: docs 10, public repo 5)
 - `README.md` says what the tool does, for whom, every input and parameter, how to run it in one
@@ -156,6 +203,7 @@ collect this data for real.
 What we will NOT build, so nobody (human or agent) builds it by accident.
 - Default: logins, databases, real customer data, a second statistic before the first one is tested.
 - No reliability, MTTF or fault-tree analysis (a stretch goal only after H-01 to H-08 are done).
-- No regression or DOE root-cause model: "investigate first" is the I-MR z-score ranking only.
-- No forecasting, no machine-to-machine or plant-to-plant comparison, no layer-by-layer chart (layers
+- No regression or DOE root-cause model: "investigate first" is the I-MR z-score ranking only. (The
+  machine / material-lot two-way ANOVA of H-18 is an association test on build averages, not a root-cause model.)
+- No forecasting, no plant-to-plant comparison (the machine / lot ANOVA of H-18 is the only comparison), no layer-by-layer chart (layers
   are summarised per build), no powder PSD/morphology or HIP parameters (not in the data).

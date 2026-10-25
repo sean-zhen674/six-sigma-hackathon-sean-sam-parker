@@ -317,3 +317,40 @@ tasks:
       reproduce Cpl, Cpu, Cp and Cpk from mean, sigma-hat and the limits; every existing number on the
       three datasets is unchanged; manifest regenerated with Python 3.12 and 7 files; stats review.
     result: "Built and reviewed 2026-10-25 18:40: capability[metric].histogram (Sturges bins of the baseline coupons) and a toggle in the Process Capable box with the calculation steps and a histogram with allowed-value and process-average lines; existing numbers unchanged (before/after identical); pytest 108 passed on both Pythons, npm test 134 passed, build OK, manifest 7 files, stats review PASS"
+
+  - id: H-18
+    title: Two-way ANOVA of machine and material lot (analysis service and data)
+    points: "supports the statistics (35): which factors are linked to a shift in the measured quality, tested properly"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-25 18:51"
+    owns: ["app/qc.py", "app/main.py", "app/manifest.json", "app/data/", "data/generate.py", "data/marginal_spread.csv", "tests/", "docs/", "SPEC.md", "CONTRACT.yaml"]
+    notes: >
+      Team request (a teammate's idea): are shifts in quality linked to a machine or a material lot, and do they
+      interact? machine_id and material_lot become optional used columns. The unit of analysis is the build
+      average (machine and lot are set per build). Quarantined builds are excluded, so a known cause such as
+      a drift is not blamed on a lot. A machine effect is planted on purpose in marginal_spread and disclosed.
+    definition_of_done: >
+      pytest passes; the ANOVA matches an independent calculation (hand-computed known answer and a balanced
+      design checked against the classic formulas); existing numbers on capable_baseline and oxygen_drift are
+      unchanged; marginal_spread's changed numbers are recorded; no NaN or inf; manifest regenerated, 7 files;
+      stats review.
+    result: "Built and reviewed 2026-10-25 19:07: two-way ANOVA (Type II, build averages, quarantined builds left out) in analyze() as factors; planted +0.025 mm machine effect in marginal_spread (disclosed; dimensional Cpk 1.04, machine p 0.0015); capable_baseline and oxygen_drift byte-identical; pytest 131 passed on both Pythons, npm test 134 passed, manifest 7 files, stats review PASS"
+
+  - id: H-19
+    title: Possible-causes panel (interaction plot and ANOVA table) on the dashboard
+    points: "supports clear demonstration (10) and the working tool (25)"
+    status: done
+    owner: "agent"
+    owns: ["app/frontend/", "demo/", "docs/", "SPEC.md"]
+    started_at: "2026-10-25 19:07"
+    notes: >
+      Starts after H-18 passes its statistics review. Shows, per metric, an interaction plot of machine by lot and
+      the ANOVA table in plain words, with an association-not-cause note.
+      Also update the guided tour (Take the tour button): add steps for the calculations toggle in the Process Capable
+      box and for the possible-causes panel (how to read the interaction plot and the p-values), keep it short.
+    definition_of_done: >
+      npm test passes; the panel shows for the three datasets; a file without the two columns shows a short note;
+      numbers come from the API only; the tour has steps for the calculations toggle and the possible-causes panel;
+      no horizontal scroll at 375 px; screenshots.
+    result: "Built and browser-checked 2026-10-25 19:19: Possible Causes by Machine and Material Lot section (interaction plot, ANOVA table in plain words, notes, null cases), tour steps for the calculations toggle and the section; numbers come from the API only; npm test 165 passed, pytest 131 passed, build OK"

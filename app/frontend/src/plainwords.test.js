@@ -6,6 +6,10 @@ import {
 import { TOUR_STEPS } from './tour.js'
 import { QUALITY, PARAMS, LEGEND_RULES, TEXT } from './labels.js'
 
+// H-19: the Possible Causes section
+import { causesTexts } from './causes.js'
+import { factorVariants } from './causes.fixture.js'
+
 // H-17: the calculation lines, verdicts and the histogram summary, built from an API-shaped answer
 import { calcBlock, blockHeading, histogramSummary } from './calc.js'
 const H17_CAP = { mean: 0.5, sigma_hat: 0.02, lsl: -0.1, usl: 0.1, cpl: 1.8, cpu: 1.7, cp: 1.75, cpk: 1.7, reliable: true, capable: true, message: null, histogram: { edges: [0, 1], counts: [3], n: 3, n_builds: 1 } }
@@ -117,6 +121,13 @@ describe('visible-string constants use plain words', () => {
       expect(bad).toEqual([])
     })
   }
+
+  it('every Possible Causes sentence (all shapes of the answer) has none', () => {
+    const texts = [null, ...factorVariants()].flatMap((f) => causesTexts(f, QUALITY))
+    expect(texts.length).toBeGreaterThan(80)
+    const bad = texts.map((t) => [t, offenders(t)]).filter(([, o]) => o.length)
+    expect(bad).toEqual([])
+  })
 
   it('the calculation steps, verdicts and histogram summary have none', () => {
     const bad = calcTexts().map((t) => [t, offenders(t)]).filter(([, o]) => o.length)

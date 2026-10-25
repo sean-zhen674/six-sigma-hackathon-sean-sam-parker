@@ -6,6 +6,7 @@ Same seed -> identical CSVs on every machine.
 Each file: 30 builds x 5 coupons = 150 rows. The build parameters are drawn once per
 build and repeated on its 5 coupon rows. Coupon results depend on those parameters
 (a small linear effect) plus independent noise per coupon.
+machine_id (blocks of 5 builds) and material_lot (blocks of 10 builds) are set per build.
 """
 from pathlib import Path
 
@@ -19,12 +20,21 @@ SEED = 5300  # base seed; each scenario uses SEED + k
 SCENARIO_SEEDS = {
     "capable_baseline": SEED + 36,        # 5336
     "oxygen_drift": SEED + 22,            # 5322
-    "marginal_spread": SEED + 36,         # 5336, the same stream as capable_baseline
+    "marginal_spread": SEED + 36,         # 5336, the same random numbers as capable_baseline
 }
 # Within-build sd of the dimensional deviation (mm). 0.02 for every scenario except
 # marginal_spread, whose parts vary more: in control, but too spread out for the +/-0.10 mm spec.
 DIM_SD_DEFAULT = 0.02
 DIM_SD = {"marginal_spread": 0.03}
+# PLANTED MACHINE EFFECT (H-18, disclosed in data/README.md): in marginal_spread only, every coupon of a
+# build printed on machine AM-02 has this constant added to its dimensional deviation (mm). The machine
+# alternates in blocks of 5 builds (AM-01 for builds 1-5, AM-02 for 6-10, ...). The shift is added AFTER the
+# random draw, so the random stream is unchanged. HONEST NOTE: the size was chosen after a scan at seed 5336.
+# 0.015 mm (the first value tried) raised no alarm but was too small to detect with 5 builds per machine and
+# lot combination (machine p = 0.135). 0.020 gave p = 0.017, 0.025 gave p = 0.0015 with no Nelson alarm
+# anywhere, 0.030 raised an alarm. We kept 0.025: large enough to detect, small enough to raise no control
+# chart alarm. The seed stays 5336.
+DIM_MACHINE_SHIFT = {"marginal_spread": 0.025}
 N_BUILDS = 30
 N_COUPONS = 5
 OUT_DIR = Path(__file__).resolve().parent
@@ -87,6 +97,8 @@ def make_scenario(scenario, seed):
             elong = elong_mean + rng.normal(0, 0.4)
             por = por_mean * rng.lognormal(0, 0.125)  # skewed, always > 0
             dev = rng.normal(0, DIM_SD.get(scenario, DIM_SD_DEFAULT))
+            if (b // 5) % 2 == 1:  # machine AM-02
+                dev += DIM_MACHINE_SHIFT.get(scenario, 0.0)
             uts, yld, elong = round(uts, 1), round(yld, 1), round(elong, 2)
             por, dev = round(por, 3), round(dev, 3)
             ok = bool(uts >= 900 and por <= 0.5 and abs(dev) <= 0.10)

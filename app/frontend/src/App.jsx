@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { analyzeDataset, analyzeUpload, fetchDatasets, fetchSpecLimits } from './api.js'
 import Calculations from './Calculations.jsx'
+import Causes from './Causes.jsx'
 import ControlChart from './ControlChart.jsx'
 import CsvHelp from './CsvHelp.jsx'
 import Tour from './Tour.jsx'
@@ -235,6 +236,7 @@ export default function App() {
           <BaselineControl value={baselineN} used={result ? result.settings.baseline_n_used : null} error={baselineError} loading={loading}
             onChange={(v) => { setBaselineN(v); setBaselineError(null) }} onApply={applyBaseline} />
         </ChartsSection>
+        {result && <Causes factors={result.factors} onOpenCsv={() => changeCsvOpen(true)} />}
         {result && <BuildTable builds={result.builds} capable={result.process_capable} hasParams={Object.keys(result.charts.imr).length > 0} />}
         <Legend />
       </main>

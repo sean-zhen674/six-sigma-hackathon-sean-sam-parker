@@ -5,7 +5,8 @@ and returns the result. There are no statistics here.
 
 Upload format (docs/csv-format.md): a CSV with one row per coupon, 5 coupons per build.
 Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm.
-The 8 print-parameter columns are optional; every other column is ignored.
+The 8 print-parameter columns are optional, and so are machine_id and material_lot (one value per build;
+they feed the possible-causes ANOVA in the `factors` key, or `factors` is null without them). Every other column is ignored.
 A file the tool cannot use gets a 422 whose text says what to fix.
 """
 import io
@@ -143,7 +144,7 @@ async def analyze_dataset(
 
 @app.post("/analyze")
 async def analyze_upload(
-    file: UploadFile = File(..., description="CSV, one row per coupon, 5 coupons per build. Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm. The 8 print-parameter columns are optional; other columns are ignored. See docs/csv-format.md"),
+    file: UploadFile = File(..., description="CSV, one row per coupon, 5 coupons per build. Required columns: build_id, build_timestamp, uts_MPa, porosity_pct, dimensional_dev_mm. The 8 print-parameter columns and machine_id / material_lot (for the possible-causes ANOVA) are optional; other columns are ignored. See docs/csv-format.md"),
     baseline_n: int = Query(20, ge=3, description="number of first builds used for the control limits"),
     uts_lsl: Optional[float] = Query(None, description="UTS lower spec limit, MPa (default 900)"),
     porosity_usl: Optional[float] = Query(None, description="porosity upper spec limit, % (default 0.5)"),
