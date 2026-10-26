@@ -11,6 +11,8 @@
 | **Live dashboard** | <https://connect.systems-apps.com/content/a5702adb-d4c3-4cbc-8856-737753cfd9d2/> |
 | **Live API and its interactive docs** | <https://connect.systems-apps.com/content/8ec33f65-f84a-4323-a51d-b2d9a70e08da/docs> |
 | **Repository** | <https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker> |
+| **Guided walkthrough with screenshots** | [demo/README.md](demo/README.md): the three test datasets, step by step |
+| **Dataset codebook** | [data/README.md](data/README.md): every file and variable |
 | **Team** | AeroPrint |
 | **Event** | Cornell Six Sigma Hackathon, Virtual DL Challenge (Distance Learning track) |
 | **Prompt** | Prompt 1, Industrial Systems: "3D Printing for Aerospace". An aerospace contractor 3D-printing titanium brackets is failing client strength tests; design a tool to monitor and flag when and whether the printing process is capable of meeting strict aerospace tolerances, and help contractors resolve these issues. |
