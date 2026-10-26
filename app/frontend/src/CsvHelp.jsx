@@ -1,5 +1,5 @@
 import Dialog from './Dialog.jsx'
-import { COLUMN_MEANINGS, OPTIONAL_COLUMNS, REQUIRED_COLUMNS } from './format.js'
+import { COLUMN_MEANINGS, FACTOR_COLUMNS, OPTIONAL_COLUMNS, REQUIRED_COLUMNS } from './format.js'
 import { TEXT } from './labels.js'
 
 // Help for people who upload their own spreadsheet file (CSV): a small link-style button that opens a popup.
@@ -26,6 +26,8 @@ export default function CsvHelp({ open, onOpenChange }) {
           <ColumnList names={REQUIRED_COLUMNS} />
           <p>{TEXT.csvOptional}</p>
           <ColumnList names={OPTIONAL_COLUMNS} />
+          <p>{TEXT.csvFactors}</p>
+          <ColumnList names={FACTOR_COLUMNS} />
           <p>{TEXT.csvOther}<code> 2026-01-05T08:00:00</code>.</p>
           <p className="csv-links">
             <a href="./aeroprint_template.csv" download>Download template (Required columns only)</a>

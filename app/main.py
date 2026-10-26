@@ -42,9 +42,10 @@ def _find_data_dir() -> Path:
 DATA_DIR = _find_data_dir()
 
 DATASET_DESCRIPTIONS = {
-    "capable_baseline": "Capable baseline: a healthy process in control, every index at least 1.33, so every build should be released.",
-    "oxygen_drift": "Oxygen drift: chamber oxygen creeps up from build 21; look for UTS falling and porosity rising.",
-    "marginal_spread": "Marginal spread: in control on every build, but the dimensional deviation varies too much, so its index is below 1.33 and the process is not capable.",
+    "capable_baseline": "Capable baseline: A healthy process in control. Every capability index is at least 1.33, so every build can be released.",
+    "oxygen_drift": "Oxygen drift: Chamber oxygen creeps up from build 21. Look for tensile strength falling and porosity rising.",
+    "marginal_spread": "Marginal spread: In control on every build but not capable, because the dimensional deviation varies too much "
+        "and its capability index is below 1.33. It also has a planted machine effect on dimensional deviation (machine AM-02 runs higher).",
 }
 
 app = FastAPI(
@@ -52,7 +53,7 @@ app = FastAPI(
     description=(
         "Monitors a titanium-bracket 3D-printing process with X-bar/R and I-MR control charts, "
         "Nelson rules, capability indices (within-build sigma = R-bar/d2) and a build disposition "
-        "(RELEASE / QUARANTINE). All statistics live in qc.py."
+        "(QUARANTINE, NOT RELEASED or RELEASE). All statistics live in qc.py."
     ),
     version="1.0.0",
 )

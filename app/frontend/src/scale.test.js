@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { makeScale, xPosition, extent, chartDomain } from './scale.js'
+import { makeScale, xPosition, extent, chartDomain, spreadLabels } from './scale.js'
 
 describe('makeScale', () => {
   it('maps the domain ends to the range ends (y axis is flipped)', () => {
@@ -88,5 +88,25 @@ describe('placeLineLabels', () => {
       expect(new Set(placed.map((p) => p.row)).size).toBe(3)
       expect(crossings(items, placed, 0, 560)).toBe(0)
     }
+  })
+})
+
+describe('spreadLabels', () => {
+  it('leaves labels that already have room where they are', () => {
+    expect(spreadLabels([{ y: 50, h: 14 }, { y: 120, h: 14 }], 0, 250)).toEqual([50, 120])
+  })
+  it('pushes overlapping labels apart, keeping the order', () => {
+    const ys = spreadLabels([{ y: 100, h: 14 }, { y: 102, h: 14 }, { y: 103, h: 14 }], 0, 250)
+    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(14)
+    expect(ys[2] - ys[1]).toBeGreaterThanOrEqual(14)
+    expect(ys[0]).toBeLessThan(ys[1])
+  })
+  it('keeps labels inside the top and bottom edges', () => {
+    const ys = spreadLabels([{ y: 2, h: 14 }, { y: 246, h: 14 }], 0, 250)
+    expect(ys[0]).toBeGreaterThanOrEqual(7)
+    expect(ys[1]).toBeLessThanOrEqual(243)
+  })
+  it('works on an empty list', () => {
+    expect(spreadLabels([], 0, 250)).toEqual([])
   })
 })

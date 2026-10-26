@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   explainRule, RULE_PHRASES, ruleTip, chartTitle, plainNote, datasetText,
 } from './format.js'
-import { spreadLabels } from './scale.js'
 
 // H-11: plain-words helpers. They only turn the API's text into words; no statistics.
 
@@ -97,26 +96,6 @@ describe('dataset text', () => {
   })
 })
 
-describe('spreadLabels', () => {
-  it('leaves labels that already have room where they are', () => {
-    expect(spreadLabels([{ y: 50, h: 14 }, { y: 120, h: 14 }], 0, 250)).toEqual([50, 120])
-  })
-  it('pushes overlapping labels apart, keeping the order', () => {
-    const ys = spreadLabels([{ y: 100, h: 14 }, { y: 102, h: 14 }, { y: 103, h: 14 }], 0, 250)
-    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(14)
-    expect(ys[2] - ys[1]).toBeGreaterThanOrEqual(14)
-    expect(ys[0]).toBeLessThan(ys[1])
-  })
-  it('keeps labels inside the top and bottom edges', () => {
-    const ys = spreadLabels([{ y: 2, h: 14 }, { y: 246, h: 14 }], 0, 250)
-    expect(ys[0]).toBeGreaterThanOrEqual(7)
-    expect(ys[1]).toBeLessThanOrEqual(243)
-  })
-  it('works on an empty list', () => {
-    expect(spreadLabels([], 0, 250)).toEqual([])
-  })
-})
-
 // ---- new upload errors from the analysis service ----
 import { explainUploadError } from './format.js'
 
@@ -196,7 +175,7 @@ describe('capital letter after a colon in the displayed text', () => {
   add(TEXT); add(QUALITY.map((q) => q.indexName)); add(LEGEND_RULES); add(CHART_HELP); add(UNRELIABLE_TEXT)
   add(DATASET_TEXT); add(COLUMN_MEANINGS); add(TOUR_STEPS)
   // The legend joins a bold word, a colon and these sentences in App.jsx, so scan them as they render.
-  add(`QUARANTINE: ${TEXT.quarantine}`); add(`RELEASE: ${TEXT.release}`)
+  add(`QUARANTINE: ${TEXT.quarantine}`); add(`RELEASE: ${TEXT.release}`); add(`NOT RELEASED: ${TEXT.notReleased}`)
   for (const k of ['xbar', 'r', 'i', 'mr']) add(chartTitle(k, 'Tensile strength', 'MPa'))
   for (const r of ['uts X-bar rule 5', 'porosity R rule 1']) add(explainRule(r))
   for (const n of [
@@ -217,9 +196,9 @@ describe('capital letter after a colon in the displayed text', () => {
   ]) add(explainUploadError(m))
   add(summarySentence({ builds: [{ build_id: 'B-1', disposition: 'QUARANTINE', investigate_first: [{ parameter: 'chamber_oxygen_ppm', z: 3, rules: [] }] }], first_out_of_control_build: 'B-1', process_capable: false }))
 
-  const below = { process_capable: false, first_out_of_control_build: null, builds: [], settings: { capable_min_index: 1.33 }, capability: { dimensional_dev_mm: { cpk: 1.19, reliable: true, capable: false } } }
+  const below = { process_capable: false, first_out_of_control_build: null, builds: [], settings: { capable_min_index: 1.33 }, capability: { dimensional_dev_mm: { cpk: 1.04, reliable: true, capable: false } } }
   add(summarySentence(below))
-  add(capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33).statusText)
+  add(capabilityRow({ cpk: 1.04, reliable: true, capable: false }, 'cpk', 1.33).statusText)
   add(capabilityRow({ cpk: 1.9, reliable: true, capable: true }, 'cpk', 1.33).statusText)
   add(calcTexts())
   // H-19: every sentence of the Possible Causes section, as it renders (also the null-factors note and the tour steps' text above)

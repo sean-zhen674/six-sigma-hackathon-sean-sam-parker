@@ -58,8 +58,8 @@ describe('calcBlock: other shapes', () => {
     ])
   })
   it('below the minimum says Not capable', () => {
-    const r = result({ dimensional_dev_mm: { ...cap.dimensional_dev_mm, cpk: 1.19, capable: false } })
-    expect(calcBlock(dim, r).verdict).toBe('1.19 is below the minimum of 1.33: Not capable')
+    const r = result({ dimensional_dev_mm: { ...cap.dimensional_dev_mm, cpk: 1.04, capable: false } })
+    expect(calcBlock(dim, r).verdict).toBe('1.04 is below the minimum of 1.33: Not capable')
   })
   it('an out-of-control chart says the index does not count, without judging the number', () => {
     const r = result({ uts_MPa: { ...cap.uts_MPa, reliable: false, capable: false } })

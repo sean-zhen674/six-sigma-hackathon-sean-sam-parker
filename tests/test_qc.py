@@ -13,6 +13,7 @@ from app.qc import (
     analyze,
     capability,
     two_way_anova,
+    apply_capability,
     disposition,
     imr,
     nelson,
@@ -218,18 +219,63 @@ def test_imr_degenerate():
 
 
 def test_disposition_order():
-    # build 0: a rule fired -> QUARANTINE ; builds 1 and 2: no rule -> RELEASE
+    # build 0: a rule fired -> QUARANTINE ; builds 1 and 2: no rule -> RELEASE (disposition looks at rules only)
     out = disposition([["uts X-bar rule 1"], [], []])
     assert out == ["QUARANTINE", "RELEASE", "RELEASE"]
 
 
-def test_out_of_spec_coupon_without_a_rule_is_release():
-    # A tight LSL puts coupons below the limit, but no control-chart rule fires: still RELEASE.
+def test_out_of_spec_coupon_without_a_rule_is_not_released():
+    # A tight LSL makes the process not capable, but no control-chart rule fires: NOT RELEASED (H-21).
     df = pd.read_csv(ROOT / "data" / "capable_baseline.csv")
     result = analyze(df, specs={"uts_MPa": {"lsl": 965}})
-    assert {b["disposition"] for b in result["builds"]} == {"RELEASE"}
+    assert {b["disposition"] for b in result["builds"]} == {"NOT RELEASED"}
     assert all(set(b) == BUILD_KEYS for b in result["builds"])
     assert result["process_capable"] is False
+
+
+# ---- H-21: the three dispositions (capability applied to the rule verdicts) ----
+
+def test_apply_capability_three_states():
+    first = ["QUARANTINE", "RELEASE"]
+    assert apply_capability(first, True) == ["QUARANTINE", "RELEASE"]          # capable: unchanged
+    assert apply_capability(first, False) == ["QUARANTINE", "NOT RELEASED"]    # not capable: a rule still wins
+
+
+def test_apply_capability_undefined_is_not_released():
+    # process_capable None (undefined) must never release a build
+    assert apply_capability(["RELEASE", "QUARANTINE"], None) == ["NOT RELEASED", "QUARANTINE"]
+
+
+def test_apply_capability_does_not_change_the_input_and_handles_empty():
+    verdicts = ["RELEASE"]
+    apply_capability(verdicts, False)
+    assert verdicts == ["RELEASE"]
+    assert apply_capability([], False) == []
+
+
+def test_analyze_dispositions_on_the_three_sample_datasets():
+    def counts(name):
+        builds = analyze(pd.read_csv(ROOT / "data" / f"{name}.csv"))["builds"]
+        out = {}
+        for b in builds:
+            out[b["disposition"]] = out.get(b["disposition"], 0) + 1
+        return out, builds
+
+    assert counts("capable_baseline")[0] == {"RELEASE": 30}
+    got, builds = counts("oxygen_drift")
+    assert got == {"QUARANTINE": 8, "NOT RELEASED": 22}
+    assert [b["build_id"] for b in builds if b["disposition"] == "QUARANTINE"] == [f"B-{n}" for n in range(1023, 1031)]
+    assert counts("marginal_spread")[0] == {"NOT RELEASED": 30}
+
+
+def test_a_broken_rule_stays_quarantine_when_the_process_is_not_capable():
+    # a build's rule verdict is never hidden by the capability decision
+    result = analyze(pd.read_csv(ROOT / "data" / "oxygen_drift.csv"))
+    assert result["process_capable"] is False
+    for b in result["builds"]:
+        assert (b["disposition"] == "QUARANTINE") == any(
+            r.startswith(("uts", "porosity")) for r in b["rules_broken"]
+        )
 
 
 # ---------------------------------------------------------------------------

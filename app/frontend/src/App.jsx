@@ -6,7 +6,7 @@ import ControlChart from './ControlChart.jsx'
 import CsvHelp from './CsvHelp.jsx'
 import Tour from './Tour.jsx'
 import {
-  BASELINE_MIN, DEFAULT_BASELINE, isNarrowScreen, showBaselineCaution, DIM_GROUP, REPO_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
+  BASELINE_MIN, DEFAULT_BASELINE, isNarrowScreen, showBaselineCaution, DIM_GROUP, REPO_URL, CODEBOOK_URL, SPEC_FIELDS, UNRELIABLE_TEXT, baselineChange, capabilityRow, chartTitle, datasetLabel, datasetText, explainRule, explainUploadError, fmt, fmtTime,
   iProps, mrProps, plainNote, rProps, specDefaults, suspectText, summarySentence, validateSpecs, xbarProps,
 } from './format.js'
 import { LEGEND_RULES, MAIN_PARAMS, PARAMS, QUALITY, TEXT } from './labels.js'
@@ -192,6 +192,10 @@ export default function App() {
               <input id="csv" key={fileKey} type="file" accept=".csv,text/csv" onChange={onFile} />
               {file && <p className="hint">Using your file: {file.name}.</p>}
               <CsvHelp open={csvOpen} onOpenChange={changeCsvOpen} />
+              <a className="codebook-link" href={CODEBOOK_URL} target="_blank" rel="noopener noreferrer">
+                {TEXT.codebookLink}
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
             </div>
           </section>
 
@@ -423,7 +427,9 @@ function ParamCharts({ name, p, ids, baselineUsed, defaultOpen }) {
   )
 }
 
-const BADGE_ICON = { RELEASE: '✔', QUARANTINE: '✖' }
+// The API says which of the three words each build gets; the page only picks an icon and a style for it.
+const BADGE_ICON = { RELEASE: '✔', QUARANTINE: '✖', 'NOT RELEASED': '✖' }
+const BADGE_CLASS = { RELEASE: 'release', QUARANTINE: 'quarantine', 'NOT RELEASED': 'held' }
 
 function BuildTable({ builds, capable, hasParams }) {
   const [onlyFlagged, setOnlyFlagged] = useState(false)
@@ -455,13 +461,9 @@ function BuildTable({ builds, capable, hasParams }) {
                 <th scope="row">{b.build_id}</th>
                 <td>{fmtTime(b.timestamp)}</td>
                 <td>
-                  {!capable && b.disposition === 'RELEASE'
-                    ? <span className="badge held"><span aria-hidden="true">✖</span> NOT RELEASED</span>
-                    : (
-                      <span className={`badge ${b.disposition.toLowerCase()}`}>
-                        <span aria-hidden="true">{BADGE_ICON[b.disposition]}</span> {b.disposition}
-                      </span>
-                    )}
+                  <span className={`badge ${BADGE_CLASS[b.disposition]}`}>
+                    <span aria-hidden="true">{BADGE_ICON[b.disposition]}</span> {b.disposition}
+                  </span>
                 </td>
                 <td>
                   {b.rules_broken.length
@@ -490,6 +492,7 @@ function Legend() {
       <ul>
         <li><strong>QUARANTINE</strong>: {TEXT.quarantine}</li>
         <li><strong>RELEASE</strong>: {TEXT.release}</li>
+        <li><strong>NOT RELEASED</strong>: {TEXT.notReleased}</li>
       </ul>
       <p className="muted">{TEXT.falseAlarms}</p>
     </section>

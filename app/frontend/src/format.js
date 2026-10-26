@@ -316,11 +316,17 @@ export const UNRELIABLE_TEXT = 'Chart out of control'
 /** The project's public repository (linked from the header). */
 export const REPO_URL = 'https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker'
 
+/** H-20: where the full documentation and the dataset codebook live on GitHub. */
+export const README_URL = REPO_URL + '#readme'
+export const CODEBOOK_URL = REPO_URL + '/blob/main/data/README.md'
+
 export const REQUIRED_COLUMNS = ['build_id', 'build_timestamp', 'uts_MPa', 'porosity_pct', 'dimensional_dev_mm']
 export const OPTIONAL_COLUMNS = [
   'laser_power_W', 'scan_speed_mm_s', 'layer_thickness_um', 'chamber_oxygen_ppm',
   'humidity_pct', 'powder_bed_temp_C', 'build_plate_temp_C', 'stress_relief_temp_C',
 ]
+/** H-21: two optional text columns, one value per build, used by the Possible Causes section. */
+export const FACTOR_COLUMNS = ['machine_id', 'material_lot']
 
 /**
  * Turn the API's 422 text (or the "HTTP 422: ..." sentence built from it) into a plain-English

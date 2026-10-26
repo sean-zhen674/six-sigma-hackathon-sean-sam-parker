@@ -9,7 +9,7 @@ process capable of the aerospace spec, since when not, and what should be done w
   Cp = (USL − LSL)/6σ̂, Cpk = min(USL − X̿, X̿ − LSL)/3σ̂ (dimensional). σ̂ = 0 gives None, never inf.
 - I-MR: CL = mean, σ̂ = MR̄/1.128, limits CL ± 3σ̂; MR UCL = 3.267·MR̄.
 - Nelson rules 1-8 on X-bar and I charts (zones at σ̂/√n or σ̂); R and MR charts use rule 1 only.
-- Disposition: QUARANTINE (rule broken on UTS/porosity X-bar or R), otherwise RELEASE.
+- Disposition (three words since H-21): QUARANTINE (rule broken on UTS/porosity X-bar or R); NOT RELEASED (no rule broken, process not capable); RELEASE (no rule broken and the process is capable).
 - Investigate first: parameters out of control at that build, ranked by |x − CL|/σ̂.
 
 ## Tasks, in order
@@ -82,12 +82,12 @@ process capable of the aerospace spec, since when not, and what should be done w
 
 ## H-14 decisions (capability wording and a not-capable example, asked 2026-10-22)
 - A capability index below 1.33 reads "Below the minimum of 1.33: Not capable"; the separate out-of-control reliability line is removed (an out-of-control chart still shows the warning on its index).
-- New example dataset marginal_spread: in control on every build, but dimensional Cpk is about 1.19, so the process is not capable. The three older CSVs and their numbers do not change.
+- New example dataset marginal_spread: in control on every build, but dimensional Cpk is about 1.19, so the process is not capable. The three older CSVs and their numbers do not change. (Cpk is 1.04 after H-18; three datasets and a 7-file manifest after the laser_power_excursion removal)
 - The chart intro becomes short bullets. (Later the extra dataset was removed again: the event asks for 2 to 3 datasets, so there are three.)
 
 ## H-15 decisions (one question: is the process capable? asked 2026-10-23)
-- The third disposition is removed, together with the coupon-out-of-specification check and its API field. A build is QUARANTINE if a rule was broken on the UTS or porosity X-bar or R chart, otherwise RELEASE.
-- When the process is not capable the dashboard greys the build table and shows RELEASE builds as NOT RELEASED (QUARANTINE stays QUARANTINE).
+- The third disposition is removed, together with the coupon-out-of-specification check and its API field. A build is QUARANTINE if a rule was broken on the UTS or porosity X-bar or R chart, otherwise RELEASE (H-21 later adds NOT RELEASED in the API).
+- When the process is not capable the dashboard greys the build table and shows RELEASE builds as NOT RELEASED (QUARANTINE stays QUARANTINE). Since H-21 the API itself sends NOT RELEASED and the page no longer relabels anything.
 - Capability indices and process_capable do not change.
 
 ## Later polish decisions (2026-10-23)
@@ -100,15 +100,15 @@ process capable of the aerospace spec, since when not, and what should be done w
 - Headings: Test Parameters: Build Average and Spread Charts; Build Parameters: Single Value and Moving Range Charts (the user's choice).
 
 ## H-16 current state (consistency pass, 2026-10-23)
-- Page order: Dataset and Test Parameters boxes side by side, the banner (Process Capable? Yes or No), Summary, Control Charts (Baseline builds input, quality charts, build parameter charts), the builds table, then "What the rules mean".
-- Charts are hand-drawn SVG (no Plotly.js). The allowed-value lines are not drawn on any chart; the dead code for them was removed.
+- Page order: Dataset and Test Parameters boxes side by side, the banner (Process Capable? Yes or No) with the calculations and histograms toggle (H-17, open by default), Summary, Control Charts (Baseline builds input, quality charts, build parameter charts), Possible Causes by Machine and Material Lot (H-19), the builds table, then "What the rules mean".
+- Charts are hand-drawn SVG (no Plotly.js). The control charts do not draw the allowed-value lines (the dead code for them was removed); the histograms in the calculations toggle do draw them (dashed).
 - Three datasets: capable_baseline, oxygen_drift, marginal_spread.
 - README files are rewritten last, after the team approves the dashboard.
 
 ## H-17 decisions (calculations and histograms toggle, 2026-10-25)
 - Team request: inside the Process Capable box, a toggle shows the calculation and a histogram for each measurement, with lines for the allowed values and the process average.
 - API: capability[metric].histogram = {edges, counts, n, n_builds} of the individual coupons of the baseline builds (the same coupons as the process average and sigma-hat). Bins by Sturges' rule, ceil(log2 n) + 1, at least 5 and at most 30, equal width over [min, max]. All values equal gives one bin with edges [v, v]; fewer than 2 values gives null. No existing number changes (checked by saving the analysis of the three datasets at baseline 20 and 3 before and after: identical once the histogram keys are removed).
-- Page: a closed-by-default details element "Show the calculations and histograms". Each block lists the steps with the API's numbers (process average, average range, sigma-hat = average range / 2.326, then only the indices that exist) and the verdict from the API's capable and reliable fields. The page only joins and rounds numbers; it adds no statistic.
+- Page: an open-by-default details element "Show the calculations and histograms". Each block lists the steps with the API's numbers (process average, average range, sigma-hat = average range / 2.326, then only the indices that exist) and the verdict from the API's capable and reliable fields. The page only joins and rounds numbers; it adds no statistic.
 - Histogram: hand-drawn SVG, no vertical numbers, a caption with the coupon and build counts, dashed purple lines for the allowed values, a solid green line for the process average, labels on separate rows so none overlap, hover or tap tooltip.
 
 ## H-18 decisions (possible causes: two-way ANOVA of machine and material lot, 2026-10-25)
@@ -123,7 +123,29 @@ process capable of the aerospace spec, since when not, and what should be done w
 - Status per measurement: red "Difference found" if any of machine, lot or interaction has significant true; green "No difference found" if some effect was tested and none is significant; "Not tested" if nothing could be tested (null p, F or significant, null entries). Each status has a symbol and words. Only the measurement with a significant effect opens, otherwise the first.
 - Interaction plot: hand-drawn SVG, one line per machine across the lots, circle / square / triangle markers and different dashes, direct labels at the line ends, a key, bars of one standard error (skipped when `se` is null), a gap where a combination has no builds. One factor gives a single line. The API notes are shown as a list (capital letter after each colon is added by capitalizeAfterColon), with "Association, not cause." above them.
 - Null handling decided: `factors` null gives one short note with a link to the file-format window; no usable factor shows `message` and the `skipped` reasons; a null interaction (oxygen_drift) is a "Not tested" row with the API message under the table; a one-factor file has no interaction row.
-- Tour: 6 steps. Two new steps, "See the calculations" (target id calc-toggle) and "Look for possible causes" (target id causes-h). A step with a target scrolls to it, outlines it, and docks the window to the bottom of the screen so the target stays visible; no target on the page means the step just shows its text. Other steps are unchanged.
+- Tour: 8 steps after H-20 (6 when H-19 was written). Two new steps, "See the calculations" (target id calc-toggle) and "Look for possible causes" (target id causes-h). A step with a target scrolls to it, outlines it, and docks the window to the bottom of the screen so the target stays visible; no target on the page means the step just shows its text. Other steps are unchanged.
 - Bug found in the browser check: a hidden table for screen readers widened the page to 664 px at 375 px; it now sits inside a hidden div.
 
+## H-20 decisions (criteria gaps on the dashboard, 2026-10-25)
+- Why: docs/criteria.md awards points for a clear user and use case, a clear demonstration with test datasets, excellent documentation, and a codebook and README for the datasets. The dashboard itself now points to each.
+- Tour: 8 steps. New first step "What AeroPrint is for" (no target, centred) names the user, the decisions and the example datasets. New last step "Read the full documentation" (no target) has an optional `link: { href, label }` rendered as an underlined anchor in the dialog. The Tab trap now includes that anchor, so the link is reachable by keyboard and Tab still wraps.
+- Dataset box: link "About the example datasets: Codebook on GitHub" (capital C because the page rule is a capital after every colon). Addresses README_URL and CODEBOOK_URL live in format.js with an exact-string test.
+- The CSV format popup was not changed. It has no link to a "full guide", only the two template downloads, which still work.
+- Page-side only; no statistic changed. README files are written separately.
+
 - Reminder (asked 2026-10-23): at the very end run ONE full consistency pass over all files (stale wording, thresholds, dead code, test names, docs against code, screenshots), then update the README files, then ask before H-08. Do not repeat the audit after every small change; it is expensive.
+
+## H-21 decisions (NOT RELEASED in the analysis service and the final audit fixes, 2026-10-25)
+- Option B, chosen by the team: the analysis service says NOT RELEASED itself. `disposition` is exactly one of three strings: QUARANTINE (a rule broke on the UTS or porosity X-bar or R chart), NOT RELEASED (no rule broke, but process_capable is false or undefined), RELEASE (no rule broke and the process is capable). A broken rule is never hidden by the capability decision. Rules on the dimensional deviation charts are listed in rules_broken but do not quarantine (qc.QUARANTINE_COLUMNS).
+- Design: `disposition(rules_broken)` stays pure and unchanged (rules only). A second tiny pure function `apply_capability(verdicts, process_capable)` turns RELEASE into NOT RELEASED unless process_capable is True (so None gives NOT RELEASED); `analyze()` calls both after process_capable is known.
+- Expected on the real data: capable_baseline 30 RELEASE; oxygen_drift 8 QUARANTINE (B-1023 to B-1030) and 22 NOT RELEASED; marginal_spread 30 NOT RELEASED.
+- Proof nothing else changed: the analysis of the three datasets was saved at baseline 20 and 3 before the edit; after mapping NOT RELEASED back to RELEASE the JSON is identical (91 builds mapped).
+- Page: the relabelling in BuildTable is removed; the badge shows the API word (NOT RELEASED: grey, dashed, with an icon and the words). The greyed table and its note stay when the process is not capable. The quarantined-builds filter stays QUARANTINE only. The legend lists three dispositions.
+- Also: the file-format window lists machine_id and material_lot; manifest checksums are computed from LF copies of the files (see the manifest test); dataset descriptions and tour/test wording fixes from the audit.
+
+## README requirements (asked 2026-10-25; the README writer must follow these)
+- The README is the FULL documentation: every function (inputs, parameters, outputs, errors), every endpoint, the file format, the method and assumptions, how to run, test and deploy.
+- It holds the clear demonstration with the three test datasets (screenshots and what to look for), as the tour's last step points people to it.
+- The dataset codebook lives in data/README.md (every file and variable, units, ranges, how the data would be collected for real, the simulation seeds, the disclosed planted machine effect); the root README links to it and summarises it.
+- State the user and use case up front (supplier quality engineer who releases builds; additive manufacturing process engineer).
+- Marginal Spread: NO build may be described as released. The process is not capable (dimensional Cpk 1.04, below 1.33), so every one of its 30 builds shows as NOT RELEASED on the dashboard. Say so wherever the dataset is described (README, demo walkthrough, data codebook, tables). Explain that since H-21 the API's per-build `disposition` is QUARANTINE (a rule broke), NOT RELEASED (no rule broke but `process_capable` is false) or RELEASE (no rule broke and the process is capable), so Marginal Spread has no RELEASE in the API either.

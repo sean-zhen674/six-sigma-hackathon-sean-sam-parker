@@ -4,7 +4,7 @@ import { CHART_HELP, fmt, rulesBroken, shortBuild } from './format.js'
 import { rulePhrase } from './plain.js'
 
 /** The one-line plain description under a chart title. kind = 'xbar' | 'r' | 'i' | 'mr'. */
-export function ChartHelp({ kind }) {
+function ChartHelp({ kind }) {
   return CHART_HELP[kind] ? <p className="chart-help">{CHART_HELP[kind]}</p> : null
 }
 

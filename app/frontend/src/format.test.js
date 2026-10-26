@@ -3,9 +3,10 @@ import {
   fmt, fmtTime, shortBuild, errorText, topSuspect, suspectText,
   perPointRules, listToPerPoint, capabilityRow, mrProps,
   friendlyParam, summarySentence, validateSpecs, analysisQuery, specDefaults, isUnreliable, CHART_HELP,
-  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, showBaselineCaution, baselineChange, DEFAULT_BASELINE, BASELINE_MIN, rulesBroken, isNarrowScreen, NARROW_SCREEN_PX,
+  datasetLabel, SPEC_FIELDS, DIM_GROUP, REPO_URL, README_URL, CODEBOOK_URL, showBaselineCaution, baselineChange, DEFAULT_BASELINE, BASELINE_MIN, rulesBroken, isNarrowScreen, NARROW_SCREEN_PX,
 } from './format.js'
 import { TEXT } from './labels.js'
+import { COLUMN_MEANINGS } from './plain.js'
 
 describe('fmt', () => {
   it('shows a missing index as not available', () => {
@@ -82,7 +83,7 @@ describe('capabilityRow', () => {
     expect(row.statusText).toBe('Meets the minimum of 1.33')
   })
   it('in control and below the minimum: Below the minimum, Not capable', () => {
-    const row = capabilityRow({ cpk: 1.19, reliable: true, capable: false }, 'cpk', 1.33)
+    const row = capabilityRow({ cpk: 1.04, reliable: true, capable: false }, 'cpk', 1.33)
     expect(row.status).toBe('below')
     expect(row.statusText).toBe('Below the minimum of 1.33: Not capable')
     expect(row.unreliable).toBe(false)
@@ -159,7 +160,7 @@ describe('summarySentence', () => {
     const cap = {
       uts_MPa: { cpl: 4.8, reliable: true, capable: true },
       porosity_pct: { cpu: 3.7, reliable: true, capable: true },
-      dimensional_dev_mm: { cpk: 1.19, reliable: true, capable: false },
+      dimensional_dev_mm: { cpk: 1.04, reliable: true, capable: false },
     }
     const r = { process_capable: false, first_out_of_control_build: null, builds: rel(30), capability: cap, settings: { capable_min_index: 1.33 } }
     expect(summarySentence(r)).toBe(
@@ -258,6 +259,11 @@ describe('control labels', () => {
     expect(TEXT.subtitle).toBeUndefined()
     expect(REPO_URL).toBe('https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker')
   })
+  it('H-20: the README and codebook links are the exact addresses, and the codebook line reads well', () => {
+    expect(README_URL).toBe('https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker#readme')
+    expect(CODEBOOK_URL).toBe('https://github.com/sean-zhen674/six-sigma-hackathon-sean-sam-parker/blob/main/data/README.md')
+    expect(TEXT.codebookLink).toBe('About the example datasets: Codebook on GitHub')
+  })
   it('the baseline helper explains the baseline in plain words', () => {
     expect(TEXT.baselineHelp).toBe(
       'How many of the earliest builds are used to learn what normal looks like. The control limits are calculated from these builds, and every later build is compared against them.')
@@ -272,7 +278,7 @@ describe('chart help text', () => {
 })
 
 // ---- H-10: friendlier upload errors ----
-import { explainUploadError, REQUIRED_COLUMNS, OPTIONAL_COLUMNS } from './format.js'
+import { explainUploadError, REQUIRED_COLUMNS, OPTIONAL_COLUMNS, FACTOR_COLUMNS } from './format.js'
 
 describe('explainUploadError', () => {
   it('explains missing columns and names them', () => {
@@ -324,6 +330,14 @@ describe('explainUploadError', () => {
   it('lists 5 required and 8 optional columns', () => {
     expect(REQUIRED_COLUMNS).toHaveLength(5)
     expect(OPTIONAL_COLUMNS).toHaveLength(8)
+  })
+
+  it('H-21: the popup also lists the two optional text columns machine_id and material_lot', () => {
+    expect(FACTOR_COLUMNS).toEqual(['machine_id', 'material_lot'])
+    for (const c of FACTOR_COLUMNS) expect(COLUMN_MEANINGS[c]).toBeTruthy()
+    expect(TEXT.csvFactors).toMatch(/one value per build/)
+    expect(TEXT.csvFactors).toMatch(/Possible Causes/)
+    expect(TEXT.csvFactors).toMatch(/break a rule/)
   })
 })
 

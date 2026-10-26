@@ -128,7 +128,7 @@ curl -F file=@yourfile.csv https://connect.systems-apps.com/content/8ec33f65-f84
 Add spec limits or the baseline size as query parameters, for example
 `.../analyze?uts_lsl=920&baseline_n=20`.
 
-**Python** (run from the repo root, after `pip install -r requirements.txt`):
+**Python** (run from the repo root, after `pip install -r app/requirements.txt`; add `-r app/requirements-dev.txt` to run the tests):
 
 ```python
 import pandas as pd
@@ -197,7 +197,7 @@ The numbers are still calculated, but which builds count as the baseline depends
 
 1. **Process Capable? Yes** means every chart is in control and every index (Cpl, Cpu, Cpk) is at least 1.33.
 2. **A red point** means that build behaved differently from the baseline builds; the table gives
-   RELEASE or QUARANTINE (builds show as NOT RELEASED while the process is not capable) and, if you included print parameters, which one to investigate first.
+   RELEASE, NOT RELEASED (no rule broke but the process is not capable) or QUARANTINE (a rule broke) and, if you included print parameters, which one to investigate first.
 3. An index only counts while its chart is in control; otherwise it is marked "not reliable".
 
 The full method, the formulas and the sample-data walkthrough are in the project [`README.md`](../README.md).

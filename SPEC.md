@@ -68,8 +68,12 @@ Say the method in words before any code exists. Load the `stats-first-steering` 
   do not apply. The flag lands on the point that completes the pattern.
   **Process capable** = every charted quality characteristic is in control AND each index ≥ 1.33.
   If the chart is out of control, the index is printed but marked "not reliable".
-  **Build disposition:** QUARANTINE if the build breaks a rule on the UTS or porosity X-bar/R chart;
-  otherwise RELEASE.
+  **Build disposition (H-21), exactly one of three words per build:** QUARANTINE if the build breaks a rule on
+  the UTS or porosity X-bar/R chart (rules on the dimensional deviation charts are listed in `rules_broken` but do
+  not quarantine: `qc.QUARANTINE_COLUMNS`); NOT RELEASED if no rule broke but the process is not capable
+  (`process_capable` false or undefined); RELEASE if no rule broke AND the process is capable. A broken rule is
+  never hidden by the capability decision. `qc.disposition()` looks at the rules only and
+  `qc.apply_capability()` adds the capability decision, so the analysis service and the dashboard say the same thing.
   **Investigate first:** for a flagged build, list the build parameters whose I-MR chart breaks a rule
   at that build, ranked by |z| = |x − CL| / σ̂ (largest first).
   **Possible causes (H-18):** is a shift in the quality linked to a machine or a material lot, and do the
@@ -149,9 +153,10 @@ Fixed for every team:
     ceil(log2 n) + 1, 5 to 30; all-equal coupons give one bin; no existing number changes);
   - X-bar and R charts for UTS (MPa) and porosity (%), with rule-breaking builds in red;
   - I-MR charts for chamber oxygen (ppm) and laser power (W), plus any other print-parameter column in the file (a file without parameter columns shows none and says the cause is not ranked);
-  - a build table: build_id, RELEASE / QUARANTINE, the rule broken, and "investigate first: <parameter>".
-    When the process is not capable the table is greyed out and every build that would be RELEASE shows
-    as NOT RELEASED (QUARANTINE stays QUARANTINE).
+  - a build table: build_id, the API's disposition (QUARANTINE, NOT RELEASED or RELEASE), the rule broken, and
+    "investigate first: <parameter>". The page shows the API's word as it is. When the process is not capable the
+    table is greyed out with a note above it (the API already says NOT RELEASED for the builds with no rule broken;
+    QUARANTINE stays QUARANTINE). The legend "What the rules mean" lists the three dispositions.
   How to read this: "A red point means that build behaved differently from the baseline builds;
   an index of 1.33 or more means the process meets spec with margin, and only counts while the chart is in control."
   - possible causes (API: `factors`): per measurement the cell means (machine × lot), the machine and lot means
@@ -173,10 +178,15 @@ Fixed for every team:
     `significant` flag ("Likely a real difference", "No evidence of a difference" or "Not tested"). Without the
     two columns the section shows one short note and a link to the file-format window. The page computes no
     statistic.
-  - the guided tour ("Take the tour") has 6 steps; H-19 added "See the calculations" (the toggle in the Process
+  - the guided tour ("Take the tour") has 8 steps (6 core steps, plus the two H-20 steps below); H-19 added "See the calculations" (the toggle in the Process
     Capable box: process average and allowed values on the histograms) and "Look for possible causes" (parallel
     lines mean no interaction; a small p-value means a likely real difference, not proof of cause). A step with a
     target scrolls to it and outlines it.
+  - H-20: the tour now has 8 steps. A new first step, "What AeroPrint is for", names the user (the supplier
+    quality engineer), the decisions (capable or not, release or quarantine, which setting, machine or lot) and the
+    three example datasets. A new last step, "Read the full documentation", points to the README and codebook on
+    GitHub with a real link button.
+  - H-20: the Dataset box has a link "About the example datasets: Codebook on GitHub" to data/README.md.
   The same numbers come back as JSON from the API.
 
 ## 7. Test datasets and codebook (rubric: demo 10, datasets 5, codebook 5)
@@ -185,7 +195,7 @@ Fixed for every team:
 collect this data for real.
 - **Datasets:** seeded simulations, 30 builds × 5 coupons each:
   `capable_baseline.csv` (in control, Cpl and Cpu ≥ 1.33); `oxygen_drift.csv` (chamber oxygen creeps up
-  from build 21, so UTS falls and porosity rises, flagged by rules 2/3 before parts fail spec);
+  from build 21, so UTS falls and porosity rises; the first alarm is at B-1023, the tensile strength X-bar chart rules 1 and 5 (rule 3 first at B-1025, rule 2 at B-1030), before parts fail spec);
   `marginal_spread.csv` (in control on every build, but the dimensional spread is wide, so Cpk is
   about 1.04, below 1.33: not capable; it also carries a PLANTED machine effect, a constant +0.025 mm on the
   dimensional deviation of every coupon printed on machine AM-02, disclosed here and in `data/README.md` (the size was chosen after a scan, only to be large enough to detect with 5 builds per combination while raising no control chart alarm), so

@@ -16,13 +16,15 @@ export const COLUMN_MEANINGS = {
   powder_bed_temp_C: 'Powder bed temperature, in °C',
   build_plate_temp_C: 'Build plate temperature, in °C',
   stress_relief_temp_C: 'Stress relief temperature, in °C',
+  machine_id: 'The printer that made the build, such as AM-01 (text)',
+  material_lot: 'The powder lot used for the build, such as Ti64-Lot-21 (text)',
 }
 
 /** Dataset descriptions in plain words, keyed by dataset name; other names use the API's text. */
 export const DATASET_TEXT = {
-  capable_baseline: 'Capable Baseline: A healthy process in control. Every capability index at least 1.33, so every build can be released.',
+  capable_baseline: 'Capable Baseline: A healthy process in control. Every capability index is at least 1.33, so every build can be released.',
   oxygen_drift: 'Oxygen Drift: Chamber oxygen creeps up from build 21. Look for tensile strength falling and porosity rising.',
-  marginal_spread: 'Marginal Spread: In-control on every build, but the parts vary too much in size, so the dimensional deviation capability index is below 1.33 and the process is not capable.',
+  marginal_spread: 'Marginal Spread: In control on every build, but the parts vary too much in size, so the dimensional deviation capability index is below 1.33 and the process is not capable. Machine AM-02 also runs higher on dimensional deviation.',
 }
 
 export function datasetText(name, apiText) {

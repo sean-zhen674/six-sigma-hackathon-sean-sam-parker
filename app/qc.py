@@ -6,7 +6,10 @@ Method (SPEC.md section 4): one subgroup is the 5 coupons of one build.
   sigma_hat    = Rbar / d2     (within-build sigma; NOT the overall standard deviation)
   I-MR chart   CL = mean, sigma = MRbar / 1.128, limits CL +/- 3 sigma, MR UCL = 3.267 * MRbar
 Limits come from a baseline (the first `baseline_n` builds in time order).
-Disposition: a build is QUARANTINE if a rule fired on it, otherwise RELEASE; the capability decision is separate.
+Disposition (one of exactly three words per build):
+  QUARANTINE    a rule fired on the build's UTS or porosity X-bar or R chart (disposition());
+  NOT RELEASED  no rule fired, but the process is not capable (process_capable is false or undefined);
+  RELEASE       no rule fired AND the process is capable (apply_capability()).
 Assumptions: coupons within a build are a rational subgroup, values are roughly normal,
 the baseline is in control, builds are independent and in time order.
 
@@ -46,7 +49,9 @@ RULE_NUMBERS = (1, 2, 3, 4, 5, 6, 7, 8)
 
 QUALITY_COLUMNS = ["uts_MPa", "porosity_pct", "dimensional_dev_mm"]
 LABELS = {"uts_MPa": "uts", "porosity_pct": "porosity", "dimensional_dev_mm": "dimensional"}
-QUARANTINE_COLUMNS = ["uts_MPa", "porosity_pct"]  # dimensional rules are shown but do not quarantine
+# Only rules on these two characteristics quarantine a build. Rules on the dimensional deviation charts are
+# still listed in the build's rules_broken, but they do not make the disposition QUARANTINE.
+QUARANTINE_COLUMNS = ["uts_MPa", "porosity_pct"]
 PARAMETER_COLUMNS = [
     "laser_power_W", "scan_speed_mm_s", "layer_thickness_um", "chamber_oxygen_ppm",
     "humidity_pct", "powder_bed_temp_C", "build_plate_temp_C", "stress_relief_temp_C",
@@ -119,10 +124,6 @@ def nelson(points, cl, sigma):
         if i >= 7 and all(abs(v) > 1 for v in z[i - 7:i + 1]):
             flags[8].append(i)
     return flags
-
-
-def _any_flag(flags):
-    return any(len(v) > 0 for v in flags.values())
 
 
 def _coupon_count_message(bad_sizes):
@@ -331,10 +332,27 @@ def disposition(rules_broken):
     """One verdict per build.
 
     rules_broken: per build, a list of rule descriptions on the UTS/porosity X-bar or R charts.
-    QUARANTINE if a rule fired; else RELEASE. Whether the process is capable is a separate decision
-    (process_capable in analyze).
+    QUARANTINE if a rule fired; else RELEASE. This function looks at the rules only: analyze() then
+    passes the result through apply_capability(), which turns RELEASE into NOT RELEASED when the process
+    is not capable.
     """
     return ["QUARANTINE" if len(rules) > 0 else "RELEASE" for rules in rules_broken]
+
+
+def apply_capability(verdicts, process_capable):
+    """Add the capability decision to the rule verdicts (H-21). Returns a new list, one word per build.
+
+    QUARANTINE stays QUARANTINE (a broken rule is never hidden). RELEASE stays RELEASE only when
+    process_capable is True; when it is False or None (undefined) every RELEASE becomes NOT RELEASED,
+    because a build must not be released while the process cannot meet the specification with margin.
+    """
+    out = []
+    for verdict in verdicts:
+        if verdict == "RELEASE" and process_capable is not True:
+            out.append("NOT RELEASED")
+        else:
+            out.append(verdict)
+    return out
 
 
 def rank_parameters(params_df, baseline_n=20):
@@ -695,6 +713,24 @@ def analyze(df, specs=None, baseline_n=20):
     df: one row per coupon with the REQUIRED_COLUMNS (SPEC section 3); PARAMETER_COLUMNS are optional;
         any other column is ignored. Bad data in a used column raises ValueError with a plain message.
     specs: optional {"uts_MPa": {"lsl": ..}, ...} overriding the defaults.
+    baseline_n: how many early builds (in time order) set the control limits and the process average
+        (default 20; at least 3; the analysis warns below 10). baseline_n_used is the number really used.
+
+    Optional columns: the 8 print parameters (PARAMETER_COLUMNS) give I-MR charts and "investigate first";
+    machine_id and material_lot (FACTOR_COLUMNS, one value per build) give the possible-causes analysis.
+    Absent ones are named in settings.parameters_missing and settings.factors_missing.
+
+    Returns a dict with these keys:
+      build_ids, charts (uts_MPa, porosity_pct, dimensional_dev_mm X-bar and R charts, and imr),
+      capability (per measurement: cp, cpk, cpl or cpu, reliable, capable, message, and the histogram of the
+      baseline coupons), process_capable (true only if every chart is in control AND every index >= 1.33),
+      first_out_of_control_build, builds, warnings, settings and factors (the machine and lot ANOVA, or None).
+    Each entry of builds has build_id, timestamp, disposition, rules_broken and investigate_first.
+    disposition is exactly one of three strings:
+      "QUARANTINE"   a rule broke on the build's UTS or porosity X-bar or R chart (rules on the dimensional
+                     deviation charts are listed in rules_broken but do not quarantine);
+      "NOT RELEASED" no rule broke, but process_capable is not true, so no build should be released yet;
+      "RELEASE"      no rule broke and the process is capable.
     """
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -823,7 +859,8 @@ def analyze(df, specs=None, baseline_n=20):
             warnings.append(f"{name}: {res['message']}")
 
     # Per-build table.
-    verdicts = disposition([quarantine_rules[i] for i in range(len(build_ids))])
+    process_capable = bool(all_in_control and all_capable)
+    verdicts = apply_capability(disposition([quarantine_rules[i] for i in range(len(build_ids))]), process_capable)
     builds = []
     for i, b in enumerate(build_ids):
         builds.append({
@@ -850,7 +887,7 @@ def analyze(df, specs=None, baseline_n=20):
         "build_ids": build_ids,
         "charts": charts,
         "capability": capabilities,
-        "process_capable": bool(all_in_control and all_capable),
+        "process_capable": process_capable,
         "first_out_of_control_build": build_ids[first_idx] if first_idx is not None else None,
         "builds": builds,
         "warnings": warnings,

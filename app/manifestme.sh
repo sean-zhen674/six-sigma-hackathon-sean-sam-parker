@@ -38,13 +38,22 @@ cp "$ROOT"/data/*.csv "$SCRIPT_DIR/data/"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/data"
-cp "$SCRIPT_DIR/main.py" "$SCRIPT_DIR/qc.py" "$SCRIPT_DIR/requirements.txt" "$SCRIPT_DIR/.python-version" "$STAGE/"
-cp "$SCRIPT_DIR"/data/*.csv "$STAGE/data/"
+# The checksums must equal the md5 of the files AS COMMITTED in git (LF line endings), because CI deploys
+# from the git checkout on Linux. A Windows working copy can hold CRLF (for example after an editor saved
+# the file), which gave qc.py a different checksum. So every file is copied through `tr -d ''`, which
+# removes carriage returns: the staged bytes are the LF bytes that git stores. tests/test_bundle.py checks it.
+copy_lf() { tr -d '' < "$1" > "$2"; }
+for f in main.py qc.py requirements.txt .python-version; do
+  copy_lf "$SCRIPT_DIR/$f" "$STAGE/$f"
+done
+for f in "$SCRIPT_DIR"/data/*.csv; do
+  copy_lf "$f" "$STAGE/data/$(basename "$f")"
+done
 
 cd "$STAGE"
 echo "Writing manifest.json for the AeroPrint FastAPI app..."
 # Entry point is main.py with the ASGI object `app` (FastAPI is ASGI, mode `fastapi`).
 "$PY" -m rsconnect.main write-manifest fastapi . --entrypoint main:app
-cp manifest.json "$SCRIPT_DIR/manifest.json"
+copy_lf manifest.json "$SCRIPT_DIR/manifest.json"  # LF, like git stores it
 
 echo "Done. manifest.json created in: $SCRIPT_DIR"

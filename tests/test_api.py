@@ -48,7 +48,8 @@ def test_marginal_spread_is_in_control_but_one_index_is_below_the_minimum():
     body = client.get("/analyze/marginal_spread").json()
     assert body["process_capable"] is False
     assert body["first_out_of_control_build"] is None
-    assert {b["disposition"] for b in body["builds"]} == {"RELEASE"}
+    # not capable, no rule broken: the service itself says NOT RELEASED (H-21)
+    assert {b["disposition"] for b in body["builds"]} == {"NOT RELEASED"}
     assert all(set(b) == BUILD_KEYS for b in body["builds"])
     cap = body["capability"]
     # 1.192 before H-18; the planted machine effect (+0.025 mm on AM-02) moves the process average to +0.0131 mm
@@ -61,6 +62,16 @@ def test_marginal_spread_is_in_control_but_one_index_is_below_the_minimum():
     assert cap["uts_MPa"]["cpl"] == pytest.approx(4.810, abs=0.0005)
     assert cap["porosity_pct"]["cpu"] == pytest.approx(3.695, abs=0.0005)
     assert cap["uts_MPa"]["capable"] is True and cap["porosity_pct"]["capable"] is True
+
+
+def test_dataset_descriptions_are_plain_words_with_a_capital_after_each_colon():
+    import re
+    descriptions = {d["name"]: d["description"] for d in client.get("/datasets").json()["datasets"]}
+    for text in descriptions.values():
+        assert "UTS" not in text
+        assert not re.search(r":\s+[a-z]", text), text
+    marginal = descriptions["marginal_spread"]
+    assert "not capable" in marginal and "AM-02" in marginal and "dimensional deviation" in marginal
 
 
 def test_spec_limits_are_the_defaults():
@@ -82,6 +93,10 @@ def test_capable_baseline_is_capable_and_all_release():
 def test_oxygen_drift_points_at_oxygen():
     body = client.get("/analyze/oxygen_drift").json()
     assert body["first_out_of_control_build"] == "B-1023"
+    # H-21: 8 builds broke a rule (QUARANTINE); the 22 others have no rule broken but the process is not capable
+    states = [b["disposition"] for b in body["builds"]]
+    assert states.count("QUARANTINE") == 8 and states.count("NOT RELEASED") == 22 and "RELEASE" not in states
+    assert [b["build_id"] for b in body["builds"] if b["disposition"] == "QUARANTINE"][0] == "B-1023"
     build = next(b for b in body["builds"] if b["build_id"] == "B-1023")
     assert build["investigate_first"][0]["parameter"] == "chamber_oxygen_ppm"
 

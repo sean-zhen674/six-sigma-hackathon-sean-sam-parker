@@ -36,8 +36,8 @@ export default function Tour({ onClose }) {
       return
     }
     if (e.key !== 'Tab') return
-    // the real Tab stops inside the window; the window itself (tabIndex -1) is only where focus starts
-    const items = [...box.current.querySelectorAll('button:not([disabled])')]
+    // the real Tab stops inside the window; the window itself (tabIndex -1) is only where focus starts; the README link on the last step is a stop too
+    const items = [...box.current.querySelectorAll('button:not([disabled]), a[href]')]
     const firstItem = items[0]
     const lastItem = items[items.length - 1]
     if (e.shiftKey && (document.activeElement === firstItem || document.activeElement === box.current)) {
@@ -64,6 +64,14 @@ export default function Tour({ onClose }) {
         <p className="tour-count">Step {step + 1} of {TOUR_STEPS.length}</p>
         <h2 id="tour-title">{s.title}</h2>
         <p id="tour-text">{s.text}</p>
+        {s.link && (
+          <p className="tour-link">
+            <a href={s.link.href} target="_blank" rel="noopener noreferrer">
+              {s.link.label}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </p>
+        )}
         <div className="tour-buttons">
           <button type="button" className="secondary" onClick={onClose}>Skip</button>
           <span className="tour-spacer" />

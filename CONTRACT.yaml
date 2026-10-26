@@ -249,7 +249,7 @@ tasks:
     result: "Built and browser-checked 2026-10-22 23:03: boxes side by side (stacked under 900 px), Parameters title, baseline builds in Control charts (baseline 10 on oxygen_drift gives first alarm B-1022), CSV format popup, capital after colon, grey text removed from Parameters; npm test 105 passed, pytest 89 passed, build OK, numbers unchanged"
 
   - id: H-14
-    title: Capability index below 1.33 wording; remove the out-of-control reliability line; fourth example dataset that is in control but not capable
+    title: Capability index below 1.33 wording; remove the out-of-control reliability line; fourth example dataset that is in control but not capable (Cpk is 1.04 after H-18; three datasets and a 7-file manifest after the laser_power_excursion removal)
     points: "supports the working tool (25) and clear demonstration (10): every capability outcome is visible"
     status: done
     owner: "agent"
@@ -258,13 +258,13 @@ tasks:
     notes: >
       Team request. Statistics in app/qc.py do not change. A new dataset marginal_spread (in control, one index
       below 1.33) is added as a fourth example; the three existing datasets and their numbers must not change.
-      (Later: laser_power_excursion removed, 3 datasets and a 7-file manifest.)
+      (Later: laser_power_excursion removed, 3 datasets and a 7-file manifest.) (Cpk is 1.04 after H-18; three datasets and a 7-file manifest after the laser_power_excursion removal)
     definition_of_done: >
       pytest and npm test pass; marginal_spread gives process capable No with no out-of-control build and an
       index below 1.33; the three existing datasets are byte-identical; the manifest lists 8 files and is
       regenerated with Python 3.12; the banner shows a clear message for below 1.33 and no
-      'Not reliable (Chart out of control)' line; screenshots; stats review.
-    result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical"
+      'Not reliable (Chart out of control)' line; screenshots; stats review. (Cpk is 1.04 after H-18; three datasets and a 7-file manifest after the laser_power_excursion removal)
+    result: "Built and reviewed 2026-10-22 23:35: marginal_spread (in control, dimensional Cpk 1.19, process capable No), three-case banner wording, in-chart baseline label removed, chart intro as bullets; pytest 91 passed, npm test 112 passed, build OK, manifest 8 files, stats review PASS, three older CSVs byte-identical (Cpk is 1.04 after H-18; three datasets and a 7-file manifest after the laser_power_excursion removal)"
 
   - id: H-15
     title: Remove the RETEST disposition; the focus is whether the process is capable
@@ -354,3 +354,49 @@ tasks:
       numbers come from the API only; the tour has steps for the calculations toggle and the possible-causes panel;
       no horizontal scroll at 375 px; screenshots.
     result: "Built and browser-checked 2026-10-25 19:19: Possible Causes by Machine and Material Lot section (interaction plot, ANOVA table in plain words, notes, null cases), tour steps for the calculations toggle and the section; numbers come from the API only; npm test 165 passed, pytest 131 passed, build OK"
+
+  - id: H-20
+    title: Criteria gaps on the dashboard - tour states the user and use case, tour links to the README, dataset box links to the codebook
+    points: "supports tool design (25): a clear user and use case (5), a clear demonstration (10); documentation (25): the codebook is easy to find"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-25 21:48"
+    owns: ["app/frontend/", "docs/", "SPEC.md", "CONTRACT.yaml"]
+    notes: >
+      Team request after reading docs/criteria.md. The first tour step says who AeroPrint is for and what it
+      decides; the last step points to the README on GitHub (with a link) for the full documentation and the
+      demonstration; the dataset box links to the dataset codebook on GitHub. README files are written later.
+    definition_of_done: >
+      npm test passes; the tour has the new first and last steps and the README link works; the dataset box
+      shows a codebook link; no horizontal scroll at 375 px; screenshots are retaken later with the README pass.
+    result: "Built and browser-checked 2026-10-25 21:51: tour step 1 states the user and use case, last step links to the README on GitHub, dataset box links to the codebook; npm test 170 passed, pytest 131 passed, build OK"
+
+  - id: H-21
+    title: Final consistency fixes and the NOT RELEASED disposition in the analysis service
+    points: "supports the working tool (25) and valid analyses (25): the API and the dashboard say the same thing about every build"
+    status: done
+    owner: "agent"
+    started_at: "2026-10-25 22:03"
+    owns: ["app/", "tests/", "docs/", "SPEC.md", "CONTRACT.yaml"]
+    notes: >
+      Team decision (Option B): when the process is not capable, every build with no rule broken is returned as
+      NOT RELEASED, so Marginal Spread has no released build in the API as well as on the dashboard. Also fixes the
+      findings of the final audit. README files are written in H-22.
+    definition_of_done: >
+      pytest and npm test pass; dispositions are QUARANTINE, RELEASE or NOT RELEASED only; no capability index,
+      limit, chart or alarm changes; manifest regenerated, 7 files, checksums match the committed files; stats review.
+    result: "Built and reviewed 2026-10-25 22:14: dispositions are QUARANTINE, RELEASE or NOT RELEASED (the service says NOT RELEASED itself when the process is not capable; marginal_spread 30 NOT RELEASED), audit findings fixed, manifest checksums now hash LF bytes (root cause of the stale qc.py checksum was CRLF); pytest 138 passed on both Pythons, npm test 172 passed, build OK, stats review PASS"
+
+  - id: H-22
+    title: Full README set - root README as the complete documentation, dataset codebook, demo walkthrough, screenshots
+    points: "supports documentation (25) and a clear demonstration (10)"
+    status: done
+    owner: "agent"
+    owns: ["README.md", "app/README.md", "app/frontend/README.md", "demo/", "data/README.md", "docs/csv-format.md"]
+    started_at: "2026-10-25 22:14"
+    notes: >
+      Follows docs/plan.md section README requirements. Starts after H-21 passes its statistics review.
+    definition_of_done: >
+      every function, endpoint, parameter and output is documented and checked against the code; the three datasets are
+      demonstrated with fresh screenshots; the codebook matches the CSVs; an independent accuracy review passes.
+    result: "Written and reviewed 2026-10-25 22:37: root README as the full documentation (1,200 lines: user and use case, demo, method, every function and endpoint, limitations, credits), app and dashboard READMEs, dataset codebook, demo walkthrough, 22 retaken screenshots; independent accuracy review found one factual error and a few gaps, all fixed; every relative link resolves; pytest 138 passed, npm test 172 passed"
